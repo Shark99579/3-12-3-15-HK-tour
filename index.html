@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HK Travel Plan✈️</title>
+    <title>HK Travel Plan ✈️</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -243,6 +243,10 @@
                                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition">
                                         <i class="fas fa-location-arrow"></i> 導航
                                     </a>
+                                    <!-- 新增：切換到 App 內建地圖 -->
+                                    <button @click.stop="switchTab('map')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold hover:bg-rose-100 transition">
+                                        <i class="fas fa-map"></i> 查看地圖
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -482,10 +486,11 @@
             const syncStatus = ref('idle');
             
             const activeDay = ref(0);
+            // 修改這裡：預設 events 為空陣列
             const tripDays = ref([
                 { 
                     coverImage: 'https://images.unsplash.com/photo-1558273636-194160a2b843?q=80&w=800', 
-                    events: [{ time: '10:00', title: '抵達香港', note: '分享連結給朋友同步', isEditing: false, type: 'event' }] 
+                    events: [] 
                 }
             ]);
             const exchangeRate = ref(4.1);
