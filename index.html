@@ -54,7 +54,7 @@
     <header :class="['pt-12 pb-4 px-6 z-20 transition-all duration-300', currentTab === 'map' ? 'absolute top-0 left-0 w-full bg-white/80 backdrop-blur-md shadow-sm' : 'bg-warm-gray']">
         <div class="flex justify-between items-end">
             <div>
-                <h1 class="text-2xl font-light tracking-widest text-soft-text">香港散策。</h1>
+                <h1 class="text-2xl font-light tracking-widest text-soft-text">3/12~3/15 HK tour。</h1>
                 <p class="text-lake-500 text-xs tracking-wider mt-1 flex items-center gap-1">
                     <i class="fas fa-users text-[10px]"></i> {{ currentTabName }}
                 </p>
@@ -184,16 +184,24 @@
     import { getDatabase, ref as dbRef, onValue, set } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
     // -------------------------------------------------------------
-    const firebaseConfig = {
-  apiKey: "AIzaSyCVRY4qEL_4Q3fxHammQBKODlfrhuTP37U",
-  authDomain: "hk-tour.firebaseapp.com",
-  databaseURL: "https://hk-tour-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "hk-tour",
-  storageBucket: "hk-tour.firebasestorage.app",
-  messagingSenderId: "764791659242",
-  appId: "1:764791659242:web:f478ee64f1013067705593",
-  measurementId: "G-3RYVGRSDX7"
+    // TODO: const firebaseConfig = {
+  apiKey: "AIzaSyCVRY4qEL_4Q3fxHammQBKODlfrhuTP37U",
+  authDomain: "hk-tour.firebaseapp.com",
+  projectId: "hk-tour",
+  storageBucket: "hk-tour.firebasestorage.app",
+  messagingSenderId: "764791659242",
+  appId: "1:764791659242:web:f478ee64f1013067705593",
+  measurementId: "G-3RYVGRSDX7"
 };
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+        // 替換這裡的內容，例如：
+        // apiKey: "AIzaSyB...",
+        // authDomain: "hk-trip-app.firebaseapp.com",
+        // databaseURL: "https://hk-trip-app-default-rtdb.firebaseio.com",
+        // projectId: "hk-trip-app",
+        // ...
+    };
 
     // 初始化 Firebase
     let db = null;
