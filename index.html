@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Tesseract.js (OCR 文字辨識) -->
-    <script src="https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
     <!-- SortableJS (拖曳排序) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <!-- FontAwesome Icons -->
@@ -68,16 +66,6 @@
         /* 地圖 Popup */
         .leaflet-popup-content-wrapper { border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0; }
         .leaflet-popup-content { margin: 12px 16px; font-family: 'Noto Sans TC'; font-size: 14px; font-weight: 500; }
-
-        /* 掃描線動畫 */
-        .scan-line {
-            position: absolute; top: 0; left: 0; width: 100%; height: 2px;
-            background: #2DD4BF; box-shadow: 0 0 4px #2DD4BF;
-            animation: scan 2s infinite linear; z-index: 20;
-        }
-        @keyframes scan {
-            0% { top: 10%; opacity: 0; } 5% { opacity: 1; } 95% { opacity: 1; } 100% { top: 90%; opacity: 0; }
-        }
     </style>
 </head>
 <body>
@@ -179,7 +167,7 @@
                 </div>
             </div>
 
-            <!-- 拖曳容器 Sortable Container (支援左滑刪除) -->
+            <!-- 拖曳容器 Sortable Container -->
             <div ref="eventListRef" class="space-y-4 pb-2">
                 <div v-for="(event, idx) in tripDays[activeDay]?.events" :key="event.id || idx" 
                      :class="['relative transition-all duration-300', event.type === 'flight' ? 'pl-2' : 'pl-14 last-item-check']">
@@ -191,117 +179,99 @@
                     </div>
                     <div v-if="event.type !== 'flight'" class="timeline-line"></div>
 
-                    <!-- 卡片外層容器 (處理滑動與刪除背景) -->
-                    <div class="relative overflow-hidden rounded-3xl shadow-soft">
+                    <!-- 卡片本體 -->
+                    <div :class="['rounded-3xl shadow-soft border group relative', 
+                        event.type === 'flight' ? 'bg-white border-blue-100 p-0 overflow-hidden' : 'bg-white border-slate-100 p-5']">
                         
-                        <!-- 刪除背景層 -->
-                        <div class="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 text-white z-0" @click="removeEvent(idx)">
-                            <div class="flex flex-col items-center gap-1 font-bold text-xs">
-                                <i class="fas fa-trash-alt text-lg"></i>
-                                <span>刪除</span>
-                            </div>
+                        <!-- 拖曳把手 -->
+                        <div class="drag-handle absolute right-3 top-3 text-slate-300 p-2 hover:text-slate-500 z-20">
+                            <i class="fas fa-bars"></i>
                         </div>
 
-                        <!-- 卡片本體 (可滑動層) -->
-                        <div :class="['relative z-10 transition-transform duration-200 ease-out border', 
-                            event.type === 'flight' ? 'bg-white border-blue-100 p-0 overflow-hidden' : 'bg-white border-slate-100 p-5']"
-                            :style="{ transform: `translateX(${event.swipeOffset || 0}px)` }"
-                            @touchstart="touchStart($event, idx)"
-                            @touchmove="touchMove($event, idx)"
-                            @touchend="touchEnd($event, idx)"
-                        >
+                        <!-- 編輯模式 -->
+                        <div v-if="event.isEditing" class="p-4 space-y-3">
+                            <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide">
+                                <span :class="event.type==='flight'?'text-blue-500':'text-primary'">{{ event.type === 'flight' ? 'Flight Details' : 'Event Details' }}</span>
+                                <button @click="removeEvent(idx)" class="text-slate-300 hover:text-red-400 px-2 py-1"><i class="fas fa-trash"></i></button>
+                            </div>
+
+                            <!-- 航班編輯欄位 -->
+                            <div v-if="event.type === 'flight'" class="space-y-3">
+                                <input v-model="event.title" placeholder="航班代號 (例: CX450)" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none focus:ring-1 focus:ring-blue-400">
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 space-y-1">
+                                        <label class="text-[10px] text-slate-400 font-bold uppercase">起飛 DEPARTURE</label>
+                                        <input v-model="event.depCode" @input="event.depCode = $event.target.value.toUpperCase()" placeholder="TPE" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
+                                        <input v-model="event.depTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
+                                    </div>
+                                    <i class="fas fa-plane text-blue-300"></i>
+                                    <div class="flex-1 space-y-1">
+                                        <label class="text-[10px] text-slate-400 font-bold uppercase">降落 ARRIVAL</label>
+                                        <input v-model="event.arrCode" @input="event.arrCode = $event.target.value.toUpperCase()" placeholder="HKG" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
+                                        <input v-model="event.arrTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 一般行程編輯欄位 -->
+                            <div v-else class="space-y-3">
+                                <input v-model="event.time" type="time" class="w-full bg-slate-50 p-3 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20">
+                                <input v-model="event.title" placeholder="地點名稱" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none focus:ring-2 focus:ring-primary/20">
+                                <input v-model="event.note" placeholder="備註" class="w-full bg-slate-50 p-3 rounded-xl text-sm text-slate-500 outline-none focus:ring-2 focus:ring-primary/20">
+                            </div>
+
+                            <button @click="event.isEditing = false; updateData()" :class="['w-full text-white py-3 rounded-xl font-bold text-sm shadow-md', event.type==='flight'?'bg-blue-500 shadow-blue-500/20':'bg-primary shadow-primary/20']">完成</button>
+                        </div>
+
+                        <!-- 顯示模式 -->
+                        <div v-else @click="event.isEditing = true" class="cursor-pointer">
                             
-                            <!-- 拖曳把手 -->
-                            <div class="drag-handle absolute right-3 top-3 text-slate-300 p-2 hover:text-slate-500 z-20">
-                                <i class="fas fa-bars"></i>
-                            </div>
-
-                            <!-- 編輯模式 -->
-                            <div v-if="event.isEditing" class="p-4 space-y-3">
-                                <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide">
-                                    <span :class="event.type==='flight'?'text-blue-500':'text-primary'">{{ event.type === 'flight' ? 'Flight Details' : 'Event Details' }}</span>
-                                    <!-- 編輯模式下的刪除按鈕 (保留給不習慣滑動的人) -->
-                                    <button @click="removeEvent(idx)" class="text-slate-300 hover:text-red-400 px-2 py-1"><i class="fas fa-trash"></i></button>
-                                </div>
-
-                                <!-- 航班編輯欄位 -->
-                                <div v-if="event.type === 'flight'" class="space-y-3">
-                                    <input v-model="event.title" placeholder="航班代號 (例: CX450)" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none focus:ring-1 focus:ring-blue-400">
+                            <!-- 航班顯示 -->
+                            <div v-if="event.type === 'flight'" class="flex flex-col">
+                                <div class="bg-blue-500 p-3 flex justify-between items-center text-white">
                                     <div class="flex items-center gap-2">
-                                        <div class="flex-1 space-y-1">
-                                            <label class="text-[10px] text-slate-400 font-bold uppercase">起飛 DEPARTURE</label>
-                                            <input v-model="event.depCode" @input="event.depCode = $event.target.value.toUpperCase()" placeholder="TPE" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
-                                            <input v-model="event.depTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
-                                        </div>
-                                        <i class="fas fa-plane text-blue-300"></i>
-                                        <div class="flex-1 space-y-1">
-                                            <label class="text-[10px] text-slate-400 font-bold uppercase">降落 ARRIVAL</label>
-                                            <input v-model="event.arrCode" @input="event.arrCode = $event.target.value.toUpperCase()" placeholder="HKG" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
-                                            <input v-model="event.arrTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
+                                        <i class="fas fa-plane-departure"></i>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold tracking-wider">{{ event.title || 'FLIGHT' }}</span>
+                                            <!-- 標題欄顯示起降機場 -->
+                                            <span v-if="event.depCode && event.arrCode" class="bg-blue-600/50 px-2 py-0.5 rounded text-xs font-mono">
+                                                {{ event.depCode }} <i class="fas fa-arrow-right text-[10px] mx-1"></i> {{ event.arrCode }}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
-
-                                <!-- 一般行程編輯欄位 -->
-                                <div v-else class="space-y-3">
-                                    <input v-model="event.time" type="time" class="w-full bg-slate-50 p-3 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20">
-                                    <input v-model="event.title" placeholder="地點名稱" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none focus:ring-2 focus:ring-primary/20">
-                                    <input v-model="event.note" placeholder="備註" class="w-full bg-slate-50 p-3 rounded-xl text-sm text-slate-500 outline-none focus:ring-2 focus:ring-primary/20">
+                                <div class="p-4 flex justify-between items-center relative">
+                                    <!-- 虛線裝飾 -->
+                                    <div class="absolute top-1/2 left-4 right-4 h-0.5 border-t-2 border-dashed border-slate-200 -z-1"></div>
+                                    
+                                    <div class="text-center bg-white px-2 z-0">
+                                        <div class="text-2xl font-black text-slate-700 uppercase">{{ event.depCode || 'DEP' }}</div>
+                                        <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.depTime || '--:--' }}</div>
+                                    </div>
+                                    <div class="text-blue-400 z-0 bg-white px-1"><i class="fas fa-plane"></i></div>
+                                    <div class="text-center bg-white px-2 z-0">
+                                        <div class="text-2xl font-black text-slate-700 uppercase">{{ event.arrCode || 'ARR' }}</div>
+                                        <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.arrTime || '--:--' }}</div>
+                                    </div>
                                 </div>
-
-                                <button @click="event.isEditing = false; autoAdjustTimes(); updateData()" :class="['w-full text-white py-3 rounded-xl font-bold text-sm shadow-md', event.type==='flight'?'bg-blue-500 shadow-blue-500/20':'bg-primary shadow-primary/20']">完成</button>
                             </div>
 
-                            <!-- 顯示模式 -->
-                            <div v-else @click="event.isEditing = true" class="cursor-pointer">
-                                
-                                <!-- 航班顯示 -->
-                                <div v-if="event.type === 'flight'" class="flex flex-col">
-                                    <div class="bg-blue-500 p-3 flex justify-between items-center text-white">
-                                        <div class="flex items-center gap-2">
-                                            <i class="fas fa-plane-departure"></i>
-                                            <div class="flex items-center gap-2">
-                                                <span class="font-bold tracking-wider">{{ event.title || 'FLIGHT' }}</span>
-                                                <!-- 標題欄顯示起降機場 -->
-                                                <span v-if="event.depCode && event.arrCode" class="bg-blue-600/50 px-2 py-0.5 rounded text-xs font-mono">
-                                                    {{ event.depCode }} <i class="fas fa-arrow-right text-[10px] mx-1"></i> {{ event.arrCode }}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="p-4 flex justify-between items-center relative">
-                                        <!-- 虛線裝飾 -->
-                                        <div class="absolute top-1/2 left-4 right-4 h-0.5 border-t-2 border-dashed border-slate-200 -z-1"></div>
-                                        
-                                        <div class="text-center bg-white px-2 z-0">
-                                            <div class="text-2xl font-black text-slate-700 uppercase">{{ event.depCode || 'DEP' }}</div>
-                                            <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.depTime || '--:--' }}</div>
-                                        </div>
-                                        <div class="text-blue-400 z-0 bg-white px-1"><i class="fas fa-plane"></i></div>
-                                        <div class="text-center bg-white px-2 z-0">
-                                            <div class="text-2xl font-black text-slate-700 uppercase">{{ event.arrCode || 'ARR' }}</div>
-                                            <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.arrTime || '--:--' }}</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- 一般行程顯示 -->
-                                <div v-else>
-                                    <h3 class="text-lg font-bold text-dark mb-1 leading-snug pr-6">{{ event.title }}</h3>
-                                    <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md mb-3 border border-slate-100">
-                                        <i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}
-                                    </p>
-                                    <p v-else class="mb-3"></p>
-                                    <div class="flex gap-2">
-                                        <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop 
-                                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition">
-                                            <i class="fas fa-location-arrow"></i> 導航
-                                        </a>
-                                        <!-- 新增：切換到 App 內建地圖 -->
-                                        <button @click.stop="switchTab('map')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold hover:bg-rose-100 transition">
-                                            <i class="fas fa-map"></i> 查看地圖
-                                        </button>
-                                    </div>
+                            <!-- 一般行程顯示 -->
+                            <div v-else>
+                                <h3 class="text-lg font-bold text-dark mb-1 leading-snug pr-6">{{ event.title }}</h3>
+                                <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md mb-3 border border-slate-100">
+                                    <i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}
+                                </p>
+                                <p v-else class="mb-3"></p>
+                                <div class="flex gap-2">
+                                    <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop 
+                                       class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition">
+                                        <i class="fas fa-location-arrow"></i> 導航
+                                    </a>
+                                    <!-- 新增：切換到 App 內建地圖 -->
+                                    <button @click.stop="switchTab('map')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold hover:bg-rose-100 transition">
+                                        <i class="fas fa-map"></i> 查看地圖
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -482,56 +452,6 @@
             </div>
         </div>
         
-        <!-- Tab 4: 拍照翻譯 -->
-        <div v-if="currentTab === 'translator'" class="flex flex-col h-full bg-black relative">
-             <div class="flex-1 relative overflow-hidden flex items-center justify-center bg-gray-900">
-                <video ref="videoRef" autoplay playsinline class="w-full h-full object-cover"></video>
-                <canvas ref="canvasRef" class="hidden"></canvas>
-                <div v-if="cameraActive && !processing" class="absolute inset-0 border-[30px] border-black/50 pointer-events-none z-10">
-                    <div class="relative w-full h-full border-2 border-white/30 rounded-lg">
-                        <div class="scan-line"></div>
-                        <div class="absolute bottom-4 w-full text-center text-white/80 text-sm font-bold drop-shadow-md">請將文字對準框框</div>
-                    </div>
-                </div>
-                <div v-if="processing" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30">
-                     <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-                     <p class="text-white font-bold">{{ processStatus }}</p>
-                </div>
-             </div>
-             <div class="bg-white rounded-t-[2rem] p-6 pb-28 -mt-6 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.2)]">
-                 <div class="flex justify-between items-center mb-4">
-                     <div>
-                         <h3 class="font-bold text-dark text-lg">拍照翻譯</h3>
-                         <p class="text-xs text-slate-400">OCR 文字辨識 -> 繁體中文</p>
-                     </div>
-                     <select v-model="sourceLang" class="bg-slate-100 text-sm font-bold text-slate-600 px-3 py-2 rounded-xl outline-none border border-slate-200">
-                         <option value="eng">英文 (香港)</option>
-                         <option value="chi_sim">簡中 (香港/大陸)</option>
-                         <option value="jpn">日文 (日本)</option>
-                         <option value="kor">韓文 (韓國)</option>
-                     </select>
-                 </div>
-                 <div class="flex justify-center items-center gap-6">
-                     <button v-if="!cameraActive" @click="initCamera" class="flex flex-col items-center gap-2">
-                         <div class="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 text-2xl active:scale-90 transition"><i class="fas fa-camera"></i></div>
-                         <span class="text-xs font-bold text-slate-500">開啟相機</span>
-                     </button>
-                     <button v-else @click="captureAndTranslate" class="w-20 h-20 rounded-full border-4 border-slate-200 p-1 active:scale-95 transition">
-                         <div class="w-full h-full bg-primary rounded-full shadow-inner"></div>
-                     </button>
-                 </div>
-                 <div v-if="translationResult" class="mt-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                     <div class="flex justify-between items-start mb-2">
-                         <span class="text-xs font-bold text-slate-400 uppercase">辨識原文:</span>
-                         <span class="text-xs font-bold text-slate-400 uppercase">翻譯結果:</span>
-                     </div>
-                     <div class="grid grid-cols-2 gap-4">
-                         <p class="text-sm text-slate-500 break-words border-r border-slate-200 pr-2">{{ originalText }}</p>
-                         <p class="text-sm font-bold text-primary break-words">{{ translationResult }}</p>
-                     </div>
-                 </div>
-             </div>
-        </div>
     </main>
 
     <!-- 底部導航 -->
@@ -544,10 +464,6 @@
             <button @click="switchTab('wallet')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'wallet' ? 'text-indigo-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
                 <div :class="['text-xl transition-all', currentTab === 'wallet' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-wallet"></i></div>
                 <span class="text-[10px] font-bold">Wallet</span>
-            </button>
-            <button @click="switchTab('translator')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'translator' ? 'text-dark -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
-                 <div :class="['text-xl transition-all', currentTab === 'translator' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-language"></i></div>
-                 <span class="text-[10px] font-bold">Trans</span>
             </button>
             <button @click="switchTab('map')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'map' ? 'text-rose-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
                 <div :class="['text-xl transition-all', currentTab === 'map' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-map"></i></div>
@@ -608,9 +524,7 @@ const firebaseConfig = {
             
             const activeDay = ref(0);
             const tripDays = ref([
-                { 
-                    events: [] 
-                }
+                { events: [] }
             ]);
             const exchangeRate = ref(4.1);
             const lastRateUpdate = ref(''); // 匯率更新時間
@@ -632,23 +546,9 @@ const firebaseConfig = {
 
             let mapInstance = null, markers = [], userMarker = null;
 
-            // 翻譯相關
-            const videoRef = ref(null);
-            const canvasRef = ref(null);
-            const cameraActive = ref(false);
-            const processing = ref(false);
-            const processStatus = ref('');
-            const originalText = ref('');
-            const translationResult = ref('');
-            const sourceLang = ref('eng');
-
             // Sortable 相關
             const eventListRef = ref(null);
             let sortableInstance = null;
-
-            // Swipe 相關狀態
-            const touchStartX = ref(0);
-            const activeSwipeIndex = ref(-1); // 當前打開刪除按鈕的 index
 
             const saveModeText = computed(() => db ? '雲端' : '本機');
 
@@ -675,57 +575,6 @@ const firebaseConfig = {
                 }
             };
 
-            // 時間計算輔助函數
-            const addMinutes = (timeStr, minsToAdd) => {
-                if (!timeStr) return '';
-                const [h, m] = timeStr.split(':').map(Number);
-                const date = new Date();
-                date.setHours(h);
-                date.setMinutes(m + minsToAdd);
-                return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-            };
-
-            // 自動調整時間函數
-            const autoAdjustTimes = () => {
-                const list = tripDays.value[activeDay.value].events;
-                if (list.length < 2) return;
-
-                // 從第二個項目開始檢查
-                for (let i = 1; i < list.length; i++) {
-                    const prev = list[i-1];
-                    const curr = list[i];
-                    
-                    // 取得前一個項目的結束參考時間
-                    let prevEndTime;
-                    if (prev.type === 'flight') {
-                        prevEndTime = prev.arrTime; // 航班用降落時間
-                    } else {
-                        prevEndTime = prev.time; // 一般行程用開始時間 (假設持續一陣子，這裡簡單邏輯直接 +30)
-                    }
-
-                    if (!prevEndTime) continue;
-
-                    // 計算當前項目至少應該開始的時間 (前一項 + 30分)
-                    const minStartTime = addMinutes(prevEndTime, 30);
-                    
-                    // 取得當前項目的開始時間
-                    let currStartTime = (curr.type === 'flight') ? curr.depTime : curr.time;
-
-                    // 比較時間字串 (簡單比較)
-                    if (currStartTime < minStartTime) {
-                        if (curr.type === 'flight') {
-                            // 航班時間通常固定，這裡只調整一般行程，或是您希望航班也順延？
-                            // 這裡保持航班不變，因為改航班時間比較敏感。
-                            // 但如果必須調整，可以取消註解下面這行:
-                            // curr.depTime = minStartTime; 
-                        } else {
-                            // 自動推遲一般行程
-                            curr.time = minStartTime;
-                        }
-                    }
-                }
-            };
-
             // 初始化 Sortable
             const initSortable = () => {
                 if (sortableInstance) sortableInstance.destroy();
@@ -740,26 +589,20 @@ const firebaseConfig = {
                         const list = tripDays.value[activeDay.value].events;
                         const item = list.splice(evt.oldIndex, 1)[0];
                         list.splice(evt.newIndex, 0, item);
-                        
-                        // 拖曳結束後自動調整時間
-                        autoAdjustTimes();
-                        
                         updateData();
                     }
                 });
             };
 
-            watch(activeDay, () => { 
-                // 切換天數時重置 Swipe 狀態
-                activeSwipeIndex.value = -1;
-                nextTick(initSortable); 
-            });
+            watch(activeDay, () => { nextTick(initSortable); });
 
             // 初始化分帳預設值 (全選)
             watch(people, (newPeople) => {
+                // 當成員變動時，確保 involvedMembers 包含所有人 (如果是新的 expense)
                 if(newExpense.value.involvedMembers.length === 0) {
                     newExpense.value.involvedMembers = [...newPeople];
                 }
+                // 初始化 customAmounts
                 newPeople.forEach(p => {
                     if(!(p in newExpense.value.customAmounts)) {
                         newExpense.value.customAmounts[p] = 0;
@@ -774,41 +617,6 @@ const firebaseConfig = {
                 }
                 return sum;
             });
-
-            // Swipe Handlers
-            const touchStart = (e, idx) => {
-                touchStartX.value = e.touches[0].clientX;
-                // 如果點擊其他卡片，關閉已打開的
-                if (activeSwipeIndex.value !== -1 && activeSwipeIndex.value !== idx) {
-                    const list = tripDays.value[activeDay.value].events;
-                    if (list[activeSwipeIndex.value]) list[activeSwipeIndex.value].swipeOffset = 0;
-                    activeSwipeIndex.value = -1;
-                }
-            };
-
-            const touchMove = (e, idx) => {
-                const currentX = e.touches[0].clientX;
-                const diff = currentX - touchStartX.value;
-                const event = tripDays.value[activeDay.value].events[idx];
-                
-                // 只允許向左滑 (diff < 0)
-                if (diff < 0 && diff > -100) {
-                    event.swipeOffset = diff;
-                }
-            };
-
-            const touchEnd = (e, idx) => {
-                const event = tripDays.value[activeDay.value].events[idx];
-                if (event.swipeOffset < -60) {
-                    // 滑動超過閾值，固定顯示刪除鈕
-                    event.swipeOffset = -80; 
-                    activeSwipeIndex.value = idx;
-                } else {
-                    // 回彈
-                    event.swipeOffset = 0;
-                    if (activeSwipeIndex.value === idx) activeSwipeIndex.value = -1;
-                }
-            };
 
             onMounted(() => {
                 if (db && tripRef) {
@@ -883,67 +691,52 @@ const firebaseConfig = {
                 }
             };
 
-            const addEvent = () => { 
-                // 新增時自動計算時間
-                const list = tripDays.value[activeDay.value].events;
-                let newTime = '10:00';
-                if (list.length > 0) {
-                    const last = list[list.length - 1];
-                    const refTime = (last.type === 'flight') ? last.arrTime : last.time;
-                    if (refTime) newTime = addMinutes(refTime, 30);
-                }
-
-                tripDays.value[activeDay.value].events.push({ 
-                    type: 'event', 
-                    time: newTime, 
-                    title: '', 
-                    isEditing: true, 
-                    id: Date.now(),
-                    swipeOffset: 0
-                }); 
-                // 自動更新會由 watch 觸發 updateData
-            };
-            
+            const addEvent = () => { tripDays.value[activeDay.value].events.push({ type: 'event', time: '12:00', title: '', isEditing: true, id: Date.now() }); };
             const addFlight = () => {
-                const list = tripDays.value[activeDay.value].events;
-                let newDep = '10:00';
-                if (list.length > 0) {
-                    const last = list[list.length - 1];
-                    const refTime = (last.type === 'flight') ? last.arrTime : last.time;
-                    if (refTime) newDep = addMinutes(refTime, 60); // 航班通常間隔久一點
-                }
-
                 tripDays.value[activeDay.value].events.push({ 
                     type: 'flight', 
-                    depCode: '', depTime: newDep,
-                    arrCode: '', arrTime: addMinutes(newDep, 120), // 預設飛2小時
+                    depCode: '', depTime: '10:00',
+                    arrCode: '', arrTime: '12:00',
                     title: '', isEditing: true,
-                    id: Date.now(),
-                    swipeOffset: 0
+                    id: Date.now()
                 });
                 updateData();
             };
-
-            const removeEvent = (i) => { 
-                tripDays.value[activeDay.value].events.splice(i, 1); 
-                activeSwipeIndex.value = -1; // 重置狀態
-                autoAdjustTimes(); // 刪除後也自動調整後續時間
-                updateData(); 
-            };
+            const removeEvent = (i) => { tripDays.value[activeDay.value].events.splice(i, 1); updateData(); };
             
+            // 新增消費邏輯更新
             const addExpense = () => {
                 const { item, amount, payer, splitType, involvedMembers, customAmounts } = newExpense.value;
+                
                 if(!item || !amount) return alert("請輸入項目和金額");
+                
+                // 驗證自訂金額是否正確
                 if(splitType === 'custom') {
                     if(customTotal.value !== amount) return alert(`分配金額總和 ($${customTotal.value}) 不等於總金額 ($${amount})`);
                 } else {
                     if(involvedMembers.length === 0) return alert("請至少選擇一位分帳成員");
                 }
+
+                // 深拷貝 customAmounts 以免後續修改影響已存資料
                 const savedCustomAmounts = JSON.parse(JSON.stringify(customAmounts));
-                expenses.value.unshift({ item, amount, payer, splitType, involvedMembers: [...involvedMembers], customAmounts: savedCustomAmounts });
+
+                expenses.value.unshift({ 
+                    item, 
+                    amount, 
+                    payer, 
+                    splitType,
+                    involvedMembers: [...involvedMembers], // 複製陣列
+                    customAmounts: savedCustomAmounts
+                });
+                
+                // 重置表單 (保留 payer 和模式)
                 newExpense.value.item = '';
                 newExpense.value.amount = '';
+                // 這裡不重置成員選擇，方便連續記帳
+                // newExpense.value.involvedMembers = [...people.value]; 
+                // newExpense.value.customAmounts = {}; // customAmounts 歸零
                 people.value.forEach(p => newExpense.value.customAmounts[p] = 0);
+
                 updateData();
             };
 
@@ -967,18 +760,28 @@ const firebaseConfig = {
 
             const totalExpense = computed(() => expenses.value.reduce((sum, item) => sum + (item.amount || 0), 0));
             
+            // 核心分帳邏輯 (Balance Calculation)
             const balances = computed(() => {
                 let bal = {};
+                // 初始化每個人
                 people.value.forEach(p => bal[p] = { paid: 0, shouldPay: 0, balance: 0 });
+                
                 expenses.value.forEach(exp => {
                     const payer = exp.payer;
                     const amount = exp.amount;
+                    
+                    // 1. 記錄誰先付錢 (Credit)
                     if(bal[payer]) bal[payer].paid += amount;
+
+                    // 2. 記錄誰該付錢 (Debit)
                     if (exp.splitType === 'custom') {
+                        // 自訂模式：直接取用設定好的金額
                         for (let person in exp.customAmounts) {
                             if(bal[person]) bal[person].shouldPay += (exp.customAmounts[person] || 0);
                         }
                     } else {
+                        // 均分模式：總金額 / 人數
+                        // 相容舊資料 (沒有 involvedMembers 欄位時預設全部分)
                         const involved = (exp.involvedMembers && exp.involvedMembers.length > 0) ? exp.involvedMembers : people.value;
                         const splitAmount = amount / involved.length;
                         involved.forEach(person => {
@@ -986,6 +789,8 @@ const firebaseConfig = {
                         });
                     }
                 });
+
+                // 3. 計算最終結餘 (正數=應收，負數=應付)
                 for(let p in bal) {
                     bal[p].balance = Math.round(bal[p].paid - bal[p].shouldPay);
                 }
@@ -1012,82 +817,15 @@ const firebaseConfig = {
             };
 
             const switchTab = async (tab) => {
-                if (currentTab.value === 'translator' && tab !== 'translator') stopCamera();
                 currentTab.value = tab;
-                
                 if (tab === 'map') {
-                    // Wait for Vue to update the DOM (v-show to take effect)
                     await nextTick();
-                    
-                    // Initialize map if it doesn't exist
-                    if (!mapInstance) {
-                        initMap();
-                    }
-                    
-                    // CRITICAL: Force Leaflet to recalculate container size
-                    // Use a small timeout to ensure the browser has painted the layout change
-                    setTimeout(() => {
-                        if (mapInstance) {
-                            mapInstance.invalidateSize();
-                            refreshMapMarkers();
-                        }
-                    }, 200); 
+                    if(!mapInstance) initMap();
+                    mapInstance.invalidateSize();
+                    refreshMapMarkers();
                 }
-                
                 if (tab === 'itinerary') nextTick(initSortable);
             };
-
-            const initCamera = async () => {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    if (videoRef.value) {
-                        videoRef.value.srcObject = stream;
-                        cameraActive.value = true;
-                    }
-                } catch (err) { alert("無法啟動相機"); console.error(err); }
-            };
-
-            const stopCamera = () => {
-                if (videoRef.value && videoRef.value.srcObject) {
-                    videoRef.value.srcObject.getTracks().forEach(track => track.stop());
-                    videoRef.value.srcObject = null;
-                }
-                cameraActive.value = false;
-            };
-
-            const captureAndTranslate = async () => {
-                if (!videoRef.value || !canvasRef.value) return;
-                processing.value = true;
-                processStatus.value = '正在辨識文字...';
-                originalText.value = '';
-                translationResult.value = '';
-
-                const video = videoRef.value;
-                const canvas = canvasRef.value;
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                canvas.getContext('2d').drawImage(video, 0, 0);
-
-                try {
-                    const { data: { text } } = await Tesseract.recognize(canvas, sourceLang.value, { logger: m => { if(m.status === 'recognizing text') processStatus.value = `辨識中 ${Math.round(m.progress * 100)}%`; }});
-                    const cleanText = text.replace(/\n/g, ' ').trim();
-                    originalText.value = cleanText;
-                    if (!cleanText) { alert("未能辨識出文字"); processing.value = false; return; }
-
-                    processStatus.value = '翻譯中...';
-                    let apiSource = 'en';
-                    if (sourceLang.value === 'jpn') apiSource = 'ja';
-                    else if (sourceLang.value === 'kor') apiSource = 'ko';
-                    else if (sourceLang.value === 'chi_sim') apiSource = 'zh-CN';
-                    
-                    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=${apiSource}|zh-TW`);
-                    const data = await res.json();
-                    if (data.responseData) translationResult.value = data.responseData.translatedText;
-                    else translationResult.value = "翻譯失敗";
-                } catch (err) { console.error(err); alert("處理發生錯誤"); } finally { processing.value = false; }
-            };
-
-            onUnmounted(() => stopCamera());
 
             const initMap = () => {
                 mapInstance = L.map('map-container').setView([22.3193, 114.1694], 13);
@@ -1134,11 +872,10 @@ const firebaseConfig = {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
                     if (currentTab.value === 'map') return 'Map';
-                    if (currentTab.value === 'translator') return 'Translator';
                 }),
                 addDay, removeDay, addEvent, addFlight, removeEvent, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, locateUser, refreshMapMarkers, fetchExchangeRate,
-                newPersonName, addPerson, removePerson, autoAdjustTimes,
-                eventListRef, touchStart, touchMove, touchEnd // 記得導出 Swipe handlers
+                newPersonName, addPerson, removePerson,
+                eventListRef
             };
         }
     }).mount('#app');
