@@ -98,7 +98,7 @@
 
         <div class="absolute bottom-4 left-0 w-full px-6">
             <div class="flex space-x-3 overflow-x-auto pb-4 pt-2 hide-scrollbar snap-x items-end">
-                <!-- 日期卡片 (改用 div 包裹以處理相對定位) -->
+                <!-- 日期卡片 -->
                 <div v-for="(day, index) in tripDays" :key="index" class="snap-center shrink-0 relative group">
                     <button @click="activeDay = index" class="outline-none block">
                         <div :class="['px-4 py-2 rounded-2xl flex flex-col items-center min-w-[64px] transition-all duration-300 border', 
@@ -108,7 +108,7 @@
                         </div>
                     </button>
                     
-                    <!-- 刪除天數按鈕 (僅在總天數 > 1 時顯示) -->
+                    <!-- 刪除天數按鈕 -->
                     <button v-if="tripDays.length > 1" 
                             @click.stop="removeDay(index)"
                             class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] shadow-md hover:bg-red-600 hover:scale-110 transition-all z-20"
@@ -147,8 +147,8 @@
         <!-- Tab 1: 行程表 -->
         <div v-if="currentTab === 'itinerary'" class="px-5 pt-6 pb-28 space-y-4">
             
-            <div v-if="!tripDays[activeDay]" class="text-center py-10 text-slate-400">載入中...</div>
-            <div v-else-if="tripDays[activeDay].events.length === 0" class="text-center py-12">
+            <div v-if="!currentDay" class="text-center py-10 text-slate-400">載入中...</div>
+            <div v-else-if="currentDay.events.length === 0" class="text-center py-12">
                 <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300 text-2xl">
                     <i class="fas fa-map-marked-alt"></i>
                 </div>
@@ -159,12 +159,12 @@
                 </div>
             </div>
 
-            <!-- 拖曳容器 Sortable Container (支援左滑刪除) -->
+            <!-- 拖曳容器 -->
             <div ref="eventListRef" class="space-y-4 pb-2">
-                <div v-for="(event, idx) in tripDays[activeDay]?.events" :key="event.id || idx" 
+                <div v-for="(event, idx) in currentDay?.events" :key="event.id || idx" 
                      :class="['relative transition-all duration-300', event.type === 'flight' ? 'pl-2' : 'pl-14 last-item-check']">
                     
-                    <!-- 左側時間軸 (僅一般行程顯示) -->
+                    <!-- 左側時間軸 -->
                     <div v-if="event.type !== 'flight'" class="absolute left-0 top-0 w-12 flex flex-col items-center z-10 pointer-events-none">
                         <span class="text-xs font-bold text-slate-400 mb-1">{{ event.time }}</span>
                         <div class="w-3 h-3 rounded-full bg-primary border-2 border-white ring-2 ring-slate-100"></div>
@@ -200,7 +200,6 @@
                             <div v-if="event.isEditing" class="p-4 space-y-3">
                                 <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide">
                                     <span :class="event.type==='flight'?'text-blue-500':'text-primary'">{{ event.type === 'flight' ? 'Flight Details' : 'Event Details' }}</span>
-                                    <!-- 編輯模式下的刪除按鈕 -->
                                     <button @click="removeEvent(idx)" class="text-slate-300 hover:text-red-400 px-2 py-1"><i class="fas fa-trash"></i></button>
                                 </div>
 
@@ -242,7 +241,6 @@
                                             <i class="fas fa-plane-departure"></i>
                                             <div class="flex items-center gap-2">
                                                 <span class="font-bold tracking-wider">{{ event.title || 'FLIGHT' }}</span>
-                                                <!-- 標題欄顯示起降機場 -->
                                                 <span v-if="event.depCode && event.arrCode" class="bg-blue-600/50 px-2 py-0.5 rounded text-xs font-mono">
                                                     {{ event.depCode }} <i class="fas fa-arrow-right text-[10px] mx-1"></i> {{ event.arrCode }}
                                                 </span>
@@ -250,9 +248,7 @@
                                         </div>
                                     </div>
                                     <div class="p-4 flex justify-between items-center relative">
-                                        <!-- 虛線裝飾 -->
                                         <div class="absolute top-1/2 left-4 right-4 h-0.5 border-t-2 border-dashed border-slate-200 -z-1"></div>
-                                        
                                         <div class="text-center bg-white px-2 z-0">
                                             <div class="text-2xl font-black text-slate-700 uppercase">{{ event.depCode || 'DEP' }}</div>
                                             <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.depTime || '--:--' }}</div>
@@ -285,8 +281,8 @@
                 </div>
             </div>
             
-            <!-- 底部新增按鈕群 -->
-            <div v-if="tripDays[activeDay]?.events.length > 0" class="flex gap-3 mt-2">
+            <!-- 底部新增按鈕 -->
+            <div v-if="currentDay?.events.length > 0" class="flex gap-3 mt-2">
                 <button @click="addEvent" class="flex-1 py-4 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-sm hover:bg-primary/5 transition-all">
                     <i class="fas fa-plus mr-1"></i> 行程
                 </button>
@@ -353,7 +349,7 @@
                 </div>
             </div>
 
-            <!-- 新增記帳區 (優化版) -->
+            <!-- 新增記帳區 -->
             <div class="bg-white p-5 rounded-3xl shadow-soft border border-slate-50">
                 <h4 class="text-sm font-bold text-slate-700 mb-4">記上一筆</h4>
                 <div class="space-y-3">
@@ -379,7 +375,7 @@
                             <button @click="newExpense.splitType = 'custom'" :class="['flex-1 py-2 rounded-lg text-xs font-bold transition', newExpense.splitType === 'custom' ? 'bg-primary text-white shadow-sm' : 'text-slate-400']">自訂 (Custom)</button>
                         </div>
 
-                        <!-- 均分模式：勾選成員 -->
+                        <!-- 均分模式 -->
                         <div v-if="newExpense.splitType === 'even'" class="flex flex-wrap gap-2">
                             <label v-for="p in people" :key="p" class="flex items-center gap-2 bg-white px-3 py-2 rounded-xl text-xs font-bold text-slate-600 border border-slate-100 cursor-pointer select-none">
                                 <input type="checkbox" :value="p" v-model="newExpense.involvedMembers" class="accent-primary rounded">
@@ -387,7 +383,7 @@
                             </label>
                         </div>
 
-                        <!-- 自訂模式：輸入金額 -->
+                        <!-- 自訂模式 -->
                         <div v-else class="space-y-2">
                             <div v-for="p in people" :key="p" class="flex items-center gap-2">
                                 <span class="text-xs font-bold text-slate-500 w-16 truncate">{{ p }}</span>
@@ -488,7 +484,7 @@ const firebaseConfig = {
         } catch (e) { console.log("預覽環境略過網址修改"); }
     }
 
-    // 初始化 Firebase (如果有 Key)
+    // 初始化 Firebase
     if (firebaseConfig.apiKey) {
         const app = initializeApp(firebaseConfig);
         db = getDatabase(app);
@@ -506,13 +502,11 @@ const firebaseConfig = {
             
             const activeDay = ref(0);
             const tripDays = ref([
-                { 
-                    events: [] 
-                }
+                { events: [] }
             ]);
             const exchangeRate = ref(4.1);
-            const lastRateUpdate = ref(''); // 匯率更新時間
-            const isFetchingRate = ref(false); // 匯率載入中狀態
+            const lastRateUpdate = ref(''); 
+            const isFetchingRate = ref(false); 
 
             const people = ref(['我', '朋友']);
             const expenses = ref([]);
@@ -522,9 +516,9 @@ const firebaseConfig = {
                 item: '', 
                 amount: '', 
                 payer: '我',
-                splitType: 'even', // 'even' (均分) 或 'custom' (自訂)
-                involvedMembers: [], // 均分時選中的人
-                customAmounts: {} // 自訂時每個人的金額
+                splitType: 'even', 
+                involvedMembers: [], 
+                customAmounts: {} 
             });
             const newPersonName = ref('');
 
@@ -534,12 +528,17 @@ const firebaseConfig = {
 
             // Swipe 相關狀態
             const touchStartX = ref(0);
-            const activeSwipeIndex = ref(-1); // 當前打開刪除按鈕的 index
+            const activeSwipeIndex = ref(-1); 
             const initialSwipeOffset = ref(0);
 
             const saveModeText = computed(() => db ? '雲端' : '本機');
+            
+            // 安全讀取 currentDay，避免在切換時報錯
+            const currentDay = computed(() => {
+                return tripDays.value[activeDay.value] || { events: [] };
+            });
 
-            // 匯率抓取功能 (ExchangeRate-API)
+            // 匯率抓取功能
             const fetchExchangeRate = async () => {
                 isFetchingRate.value = true;
                 try {
@@ -549,7 +548,7 @@ const firebaseConfig = {
                         exchangeRate.value = parseFloat(data.rates.TWD.toFixed(2));
                         const now = new Date();
                         lastRateUpdate.value = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
-                        updateData(); // 儲存更新後的匯率
+                        updateData();
                         alert(`匯率已更新！目前 1 HKD ≈ ${exchangeRate.value} TWD`);
                     } else {
                         alert("無法取得匯率資料，請稍後再試。");
@@ -574,39 +573,27 @@ const firebaseConfig = {
 
             // 自動調整時間函數
             const autoAdjustTimes = () => {
-                const list = tripDays.value[activeDay.value].events;
+                const list = currentDay.value.events;
                 if (list.length < 2) return;
 
-                // 從第二個項目開始檢查
                 for (let i = 1; i < list.length; i++) {
                     const prev = list[i-1];
                     const curr = list[i];
                     
-                    // 取得前一個項目的結束參考時間
                     let prevEndTime;
                     if (prev.type === 'flight') {
-                        prevEndTime = prev.arrTime; // 航班用降落時間
+                        prevEndTime = prev.arrTime;
                     } else {
-                        prevEndTime = prev.time; // 一般行程用開始時間 (假設持續一陣子，這裡簡單邏輯直接 +30)
+                        prevEndTime = prev.time;
                     }
 
                     if (!prevEndTime) continue;
 
-                    // 計算當前項目至少應該開始的時間 (前一項 + 30分)
                     const minStartTime = addMinutes(prevEndTime, 30);
-                    
-                    // 取得當前項目的開始時間
                     let currStartTime = (curr.type === 'flight') ? curr.depTime : curr.time;
 
-                    // 比較時間字串 (簡單比較)
                     if (currStartTime < minStartTime) {
-                        if (curr.type === 'flight') {
-                            // 航班時間通常固定，這裡只調整一般行程，或是您希望航班也順延？
-                            // 這裡保持航班不變，因為改航班時間比較敏感。
-                            // 但如果必須調整，可以取消註解下面這行:
-                            // curr.depTime = minStartTime; 
-                        } else {
-                            // 自動推遲一般行程
+                        if (curr.type !== 'flight') {
                             curr.time = minStartTime;
                         }
                     }
@@ -627,22 +614,18 @@ const firebaseConfig = {
                         const list = tripDays.value[activeDay.value].events;
                         const item = list.splice(evt.oldIndex, 1)[0];
                         list.splice(evt.newIndex, 0, item);
-                        
-                        // 拖曳結束後自動調整時間
                         autoAdjustTimes();
-                        
                         updateData();
                     }
                 });
             };
 
             watch(activeDay, () => { 
-                // 切換天數時重置 Swipe 狀態
                 activeSwipeIndex.value = -1;
                 nextTick(initSortable); 
             });
 
-            // 初始化分帳預設值 (全選)
+            // 初始化分帳預設值
             watch(people, (newPeople) => {
                 if(newExpense.value.involvedMembers.length === 0) {
                     newExpense.value.involvedMembers = [...newPeople];
@@ -668,7 +651,6 @@ const firebaseConfig = {
                 const event = tripDays.value[activeDay.value].events[idx];
                 initialSwipeOffset.value = event.swipeOffset || 0;
 
-                // 如果點擊其他卡片，關閉已打開的
                 if (activeSwipeIndex.value !== -1 && activeSwipeIndex.value !== idx) {
                     const list = tripDays.value[activeDay.value].events;
                     if (list[activeSwipeIndex.value]) list[activeSwipeIndex.value].swipeOffset = 0;
@@ -681,10 +663,7 @@ const firebaseConfig = {
                 const diff = currentX - touchStartX.value;
                 const event = tripDays.value[activeDay.value].events[idx];
                 
-                // 計算目標位移
                 let targetOffset = initialSwipeOffset.value + diff;
-
-                // 限制範圍：最多左滑到 -100px (顯示刪除)，右滑不能超過 0 (關閉)
                 if (targetOffset > 0) targetOffset = 0;
                 if (targetOffset < -100) targetOffset = -100;
 
@@ -693,12 +672,11 @@ const firebaseConfig = {
 
             const touchEnd = (e, idx) => {
                 const event = tripDays.value[activeDay.value].events[idx];
-                // 判斷閾值：如果滑動超過 -40px 就自動吸附到開啟狀態，否則關閉
                 if (event.swipeOffset < -40) {
-                    event.swipeOffset = -80; // 吸附到開啟
+                    event.swipeOffset = -80; 
                     activeSwipeIndex.value = idx;
                 } else {
-                    event.swipeOffset = 0; // 吸附到關閉
+                    event.swipeOffset = 0;
                     if (activeSwipeIndex.value === idx) activeSwipeIndex.value = -1;
                 }
             };
@@ -760,8 +738,10 @@ const firebaseConfig = {
                 timer = setTimeout(updateData, 1000);
             }, { deep: true });
 
-            const addDay = () => { 
+            const addDay = async () => { 
                 tripDays.value.push({ events: [] }); 
+                // 等待 Vue 更新 DOM，確保 new day 存在
+                await nextTick();
                 activeDay.value = tripDays.value.length - 1; 
                 updateData(); 
             };
@@ -776,7 +756,7 @@ const firebaseConfig = {
             };
 
             const addEvent = () => { 
-                const list = tripDays.value[activeDay.value].events;
+                const list = currentDay.value.events;
                 let newTime = '10:00';
                 if (list.length > 0) {
                     const last = list[list.length - 1];
@@ -795,7 +775,7 @@ const firebaseConfig = {
             };
             
             const addFlight = () => {
-                const list = tripDays.value[activeDay.value].events;
+                const list = currentDay.value.events;
                 let newDep = '10:00';
                 if (list.length > 0) {
                     const last = list[list.length - 1];
@@ -907,7 +887,7 @@ const firebaseConfig = {
             };
 
             return {
-                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal,
+                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDay,
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
