@@ -11,8 +11,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Tesseract.js (OCR 文字辨識) -->
-    <script src="https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
     <!-- SortableJS (拖曳排序) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <!-- FontAwesome Icons -->
@@ -68,16 +66,6 @@
         /* 地圖 Popup */
         .leaflet-popup-content-wrapper { border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0; }
         .leaflet-popup-content { margin: 12px 16px; font-family: 'Noto Sans TC'; font-size: 14px; font-weight: 500; }
-
-        /* 掃描線動畫 */
-        .scan-line {
-            position: absolute; top: 0; left: 0; width: 100%; height: 2px;
-            background: #2DD4BF; box-shadow: 0 0 4px #2DD4BF;
-            animation: scan 2s infinite linear; z-index: 20;
-        }
-        @keyframes scan {
-            0% { top: 10%; opacity: 0; } 5% { opacity: 1; } 95% { opacity: 1; } 100% { top: 90%; opacity: 0; }
-        }
     </style>
 </head>
 <body>
@@ -213,13 +201,13 @@
                                 <div class="flex items-center gap-2">
                                     <div class="flex-1 space-y-1">
                                         <label class="text-[10px] text-slate-400 font-bold uppercase">起飛 DEPARTURE</label>
-                                        <input v-model="event.depCode" placeholder="TPE" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
+                                        <input v-model="event.depCode" @input="event.depCode = $event.target.value.toUpperCase()" placeholder="TPE" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
                                         <input v-model="event.depTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
                                     </div>
                                     <i class="fas fa-plane text-blue-300"></i>
                                     <div class="flex-1 space-y-1">
                                         <label class="text-[10px] text-slate-400 font-bold uppercase">降落 ARRIVAL</label>
-                                        <input v-model="event.arrCode" placeholder="HKG" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
+                                        <input v-model="event.arrCode" @input="event.arrCode = $event.target.value.toUpperCase()" placeholder="HKG" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
                                         <input v-model="event.arrTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
                                     </div>
                                 </div>
@@ -243,7 +231,13 @@
                                 <div class="bg-blue-500 p-3 flex justify-between items-center text-white">
                                     <div class="flex items-center gap-2">
                                         <i class="fas fa-plane-departure"></i>
-                                        <span class="font-bold tracking-wider">{{ event.title || 'FLIGHT' }}</span>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold tracking-wider">{{ event.title || 'FLIGHT' }}</span>
+                                            <!-- 標題欄顯示起降機場 -->
+                                            <span v-if="event.depCode && event.arrCode" class="bg-blue-600/50 px-2 py-0.5 rounded text-xs font-mono">
+                                                {{ event.depCode }} <i class="fas fa-arrow-right text-[10px] mx-1"></i> {{ event.arrCode }}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="p-4 flex justify-between items-center relative">
@@ -251,12 +245,12 @@
                                     <div class="absolute top-1/2 left-4 right-4 h-0.5 border-t-2 border-dashed border-slate-200 -z-1"></div>
                                     
                                     <div class="text-center bg-white px-2 z-0">
-                                        <div class="text-2xl font-black text-slate-700">{{ event.depCode || 'DEP' }}</div>
+                                        <div class="text-2xl font-black text-slate-700 uppercase">{{ event.depCode || 'DEP' }}</div>
                                         <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.depTime || '--:--' }}</div>
                                     </div>
                                     <div class="text-blue-400 z-0 bg-white px-1"><i class="fas fa-plane"></i></div>
                                     <div class="text-center bg-white px-2 z-0">
-                                        <div class="text-2xl font-black text-slate-700">{{ event.arrCode || 'ARR' }}</div>
+                                        <div class="text-2xl font-black text-slate-700 uppercase">{{ event.arrCode || 'ARR' }}</div>
                                         <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.arrTime || '--:--' }}</div>
                                     </div>
                                 </div>
@@ -302,9 +296,17 @@
             <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold">$$</div>
-                    <span class="text-xs font-bold text-slate-500">匯率 (HKD → TWD)</span>
+                    <div class="flex flex-col">
+                        <span class="text-xs font-bold text-slate-500">匯率 (HKD → TWD)</span>
+                        <span class="text-[10px] text-slate-400" v-if="lastRateUpdate">更新: {{ lastRateUpdate }}</span>
+                    </div>
                 </div>
-                <input v-model.number="exchangeRate" @change="updateData" type="number" step="0.1" class="w-20 text-right font-bold text-dark bg-slate-50 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-primary">
+                <div class="flex items-center gap-2">
+                    <input v-model.number="exchangeRate" @change="updateData" type="number" step="0.01" class="w-20 text-right font-bold text-dark bg-slate-50 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-primary">
+                    <button @click="fetchExchangeRate" class="w-8 h-8 bg-slate-100 rounded-full text-slate-500 hover:bg-slate-200 flex items-center justify-center transition" title="更新即時匯率">
+                        <i :class="['fas fa-sync-alt', isFetchingRate ? 'fa-spin' : '']"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- 成員管理 -->
@@ -345,20 +347,52 @@
                 </div>
             </div>
 
-            <!-- 新增記帳區 -->
+            <!-- 新增記帳區 (優化版) -->
             <div class="bg-white p-5 rounded-3xl shadow-soft border border-slate-50">
                 <h4 class="text-sm font-bold text-slate-700 mb-4">記上一筆</h4>
                 <div class="space-y-3">
-                    <input v-model="newExpense.item" placeholder="買了什麼?" class="w-full bg-slate-50 p-4 rounded-2xl text-sm font-medium outline-none">
+                    <input v-model="newExpense.item" placeholder="項目 (例如: 晚餐)" class="w-full bg-slate-50 p-4 rounded-2xl text-sm font-medium outline-none">
+                    
                     <div class="flex gap-3">
                         <div class="flex-1 relative">
                             <span class="absolute left-4 top-4 text-slate-400 text-xs font-bold">HKD</span>
-                            <input v-model.number="newExpense.amount" type="number" class="w-full bg-slate-50 pl-12 p-4 rounded-2xl text-sm font-bold outline-none">
+                            <input v-model.number="newExpense.amount" type="number" placeholder="總金額" class="w-full bg-slate-50 pl-12 p-4 rounded-2xl text-sm font-bold outline-none">
                         </div>
-                        <select v-model="newExpense.payer" class="bg-slate-50 px-4 rounded-2xl text-sm font-bold outline-none text-slate-600">
-                            <option v-for="p in people" :value="p">{{ p }} 先付</option>
-                        </select>
+                        <div class="flex-1">
+                            <span class="text-[10px] text-slate-400 font-bold ml-1">誰先付錢?</span>
+                            <select v-model="newExpense.payer" class="w-full bg-slate-50 p-4 rounded-2xl text-sm font-bold outline-none text-slate-600 mt-1">
+                                <option v-for="p in people" :value="p">{{ p }}</option>
+                            </select>
+                        </div>
                     </div>
+
+                    <!-- 分帳模式切換 -->
+                    <div class="bg-slate-50 p-3 rounded-2xl mt-2">
+                        <div class="flex mb-3 bg-white rounded-xl p-1 shadow-sm">
+                            <button @click="newExpense.splitType = 'even'" :class="['flex-1 py-2 rounded-lg text-xs font-bold transition', newExpense.splitType === 'even' ? 'bg-primary text-white shadow-sm' : 'text-slate-400']">均分 (Average)</button>
+                            <button @click="newExpense.splitType = 'custom'" :class="['flex-1 py-2 rounded-lg text-xs font-bold transition', newExpense.splitType === 'custom' ? 'bg-primary text-white shadow-sm' : 'text-slate-400']">自訂 (Custom)</button>
+                        </div>
+
+                        <!-- 均分模式：勾選成員 -->
+                        <div v-if="newExpense.splitType === 'even'" class="flex flex-wrap gap-2">
+                            <label v-for="p in people" :key="p" class="flex items-center gap-2 bg-white px-3 py-2 rounded-xl text-xs font-bold text-slate-600 border border-slate-100 cursor-pointer select-none">
+                                <input type="checkbox" :value="p" v-model="newExpense.involvedMembers" class="accent-primary rounded">
+                                {{ p }}
+                            </label>
+                        </div>
+
+                        <!-- 自訂模式：輸入金額 -->
+                        <div v-else class="space-y-2">
+                            <div v-for="p in people" :key="p" class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-500 w-16 truncate">{{ p }}</span>
+                                <input v-model.number="newExpense.customAmounts[p]" type="number" placeholder="0" class="flex-1 bg-white p-2 rounded-lg text-xs outline-none border border-slate-100 focus:border-primary">
+                            </div>
+                            <div class="text-right text-[10px] font-bold" :class="customTotal === newExpense.amount ? 'text-green-500' : 'text-red-400'">
+                                目前分配: ${{ customTotal }} / ${{ newExpense.amount || 0 }}
+                            </div>
+                        </div>
+                    </div>
+
                     <button @click="addExpense" class="w-full bg-dark text-white py-4 rounded-2xl font-bold shadow-lg shadow-dark/20 active:scale-[0.98] transition-transform">
                         確認記帳
                     </button>
@@ -368,17 +402,32 @@
             <!-- 列表 -->
             <div class="space-y-3 pb-4">
                 <h4 class="text-sm font-bold text-slate-400 ml-2">最近紀錄</h4>
-                <div v-for="(exp, idx) in expenses" :key="idx" class="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-50 shadow-sm">
-                    <div class="flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center"><i class="fas fa-shopping-bag"></i></div>
-                        <div>
-                            <div class="font-bold text-dark text-sm">{{ exp.item }}</div>
-                            <div class="text-[10px] text-slate-400 font-medium">{{ exp.payer }} 付款</div>
+                <div v-for="(exp, idx) in expenses" :key="idx" class="flex flex-col bg-white p-4 rounded-2xl border border-slate-50 shadow-sm relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center"><i class="fas fa-shopping-bag"></i></div>
+                            <div>
+                                <div class="font-bold text-dark text-sm">{{ exp.item }}</div>
+                                <div class="text-[10px] text-slate-400 font-medium">{{ exp.payer }} 先付</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-dark text-sm">HKD {{ exp.amount }}</div>
+                            <button @click="removeExpense(idx)" class="text-[10px] text-slate-300 hover:text-red-400 mt-1">刪除</button>
                         </div>
                     </div>
-                    <div class="text-right">
-                        <div class="font-bold text-dark text-sm">HKD {{ exp.amount }}</div>
-                        <button @click="removeExpense(idx)" class="text-[10px] text-slate-300 hover:text-red-400 mt-1">刪除</button>
+                    <!-- 顯示分帳詳情 -->
+                    <div class="bg-slate-50 rounded-lg p-2 text-[10px] text-slate-500">
+                        <div v-if="exp.splitType === 'even'">
+                            <span class="font-bold">均分成員:</span> {{ exp.involvedMembers.join(', ') }} 
+                            (每人 ${{ Math.round(exp.amount / exp.involvedMembers.length) }})
+                        </div>
+                        <div v-else>
+                            <span class="font-bold">自訂分帳:</span> 
+                            <span v-for="(amt, name) in exp.customAmounts" :key="name" v-show="amt > 0" class="mr-2">
+                                {{ name }}:${{ amt }}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -403,56 +452,6 @@
             </div>
         </div>
         
-        <!-- Tab 4: 拍照翻譯 -->
-        <div v-if="currentTab === 'translator'" class="flex flex-col h-full bg-black relative">
-             <div class="flex-1 relative overflow-hidden flex items-center justify-center bg-gray-900">
-                <video ref="videoRef" autoplay playsinline class="w-full h-full object-cover"></video>
-                <canvas ref="canvasRef" class="hidden"></canvas>
-                <div v-if="cameraActive && !processing" class="absolute inset-0 border-[30px] border-black/50 pointer-events-none z-10">
-                    <div class="relative w-full h-full border-2 border-white/30 rounded-lg">
-                        <div class="scan-line"></div>
-                        <div class="absolute bottom-4 w-full text-center text-white/80 text-sm font-bold drop-shadow-md">請將文字對準框框</div>
-                    </div>
-                </div>
-                <div v-if="processing" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-30">
-                     <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-                     <p class="text-white font-bold">{{ processStatus }}</p>
-                </div>
-             </div>
-             <div class="bg-white rounded-t-[2rem] p-6 pb-28 -mt-6 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.2)]">
-                 <div class="flex justify-between items-center mb-4">
-                     <div>
-                         <h3 class="font-bold text-dark text-lg">拍照翻譯</h3>
-                         <p class="text-xs text-slate-400">OCR 文字辨識 -> 繁體中文</p>
-                     </div>
-                     <select v-model="sourceLang" class="bg-slate-100 text-sm font-bold text-slate-600 px-3 py-2 rounded-xl outline-none border border-slate-200">
-                         <option value="eng">英文 (香港)</option>
-                         <option value="chi_sim">簡中 (香港/大陸)</option>
-                         <option value="jpn">日文 (日本)</option>
-                         <option value="kor">韓文 (韓國)</option>
-                     </select>
-                 </div>
-                 <div class="flex justify-center items-center gap-6">
-                     <button v-if="!cameraActive" @click="initCamera" class="flex flex-col items-center gap-2">
-                         <div class="w-16 h-16 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 text-2xl active:scale-90 transition"><i class="fas fa-camera"></i></div>
-                         <span class="text-xs font-bold text-slate-500">開啟相機</span>
-                     </button>
-                     <button v-else @click="captureAndTranslate" class="w-20 h-20 rounded-full border-4 border-slate-200 p-1 active:scale-95 transition">
-                         <div class="w-full h-full bg-primary rounded-full shadow-inner"></div>
-                     </button>
-                 </div>
-                 <div v-if="translationResult" class="mt-6 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                     <div class="flex justify-between items-start mb-2">
-                         <span class="text-xs font-bold text-slate-400 uppercase">辨識原文:</span>
-                         <span class="text-xs font-bold text-slate-400 uppercase">翻譯結果:</span>
-                     </div>
-                     <div class="grid grid-cols-2 gap-4">
-                         <p class="text-sm text-slate-500 break-words border-r border-slate-200 pr-2">{{ originalText }}</p>
-                         <p class="text-sm font-bold text-primary break-words">{{ translationResult }}</p>
-                     </div>
-                 </div>
-             </div>
-        </div>
     </main>
 
     <!-- 底部導航 -->
@@ -465,10 +464,6 @@
             <button @click="switchTab('wallet')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'wallet' ? 'text-indigo-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
                 <div :class="['text-xl transition-all', currentTab === 'wallet' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-wallet"></i></div>
                 <span class="text-[10px] font-bold">Wallet</span>
-            </button>
-            <button @click="switchTab('translator')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'translator' ? 'text-dark -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
-                 <div :class="['text-xl transition-all', currentTab === 'translator' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-language"></i></div>
-                 <span class="text-[10px] font-bold">Trans</span>
             </button>
             <button @click="switchTab('map')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'map' ? 'text-rose-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
                 <div :class="['text-xl transition-all', currentTab === 'map' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-map"></i></div>
@@ -487,7 +482,7 @@
     // ==========================================
     // 🔑 請在此填入 Firebase Key
     // ==========================================
-   const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyCVRY4qEL_4Q3fxHammQBKODlfrhuTP37U",
   authDomain: "hk-tour.firebaseapp.com",
   databaseURL: "https://hk-tour-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -528,35 +523,57 @@
             const syncStatus = ref('idle');
             
             const activeDay = ref(0);
-            // 修改這裡：移除 coverImage 欄位
             const tripDays = ref([
-                { 
-                    events: [] 
-                }
+                { events: [] }
             ]);
             const exchangeRate = ref(4.1);
+            const lastRateUpdate = ref(''); // 匯率更新時間
+            const isFetchingRate = ref(false); // 匯率載入中狀態
+
             const people = ref(['我', '朋友']);
             const expenses = ref([]);
-            const newExpense = ref({ item: '', amount: '', payer: '我' });
+            
+            // 新增分帳用的資料結構
+            const newExpense = ref({ 
+                item: '', 
+                amount: '', 
+                payer: '我',
+                splitType: 'even', // 'even' (均分) 或 'custom' (自訂)
+                involvedMembers: [], // 均分時選中的人
+                customAmounts: {} // 自訂時每個人的金額
+            });
             const newPersonName = ref('');
 
             let mapInstance = null, markers = [], userMarker = null;
-
-            // 翻譯相關
-            const videoRef = ref(null);
-            const canvasRef = ref(null);
-            const cameraActive = ref(false);
-            const processing = ref(false);
-            const processStatus = ref('');
-            const originalText = ref('');
-            const translationResult = ref('');
-            const sourceLang = ref('eng');
 
             // Sortable 相關
             const eventListRef = ref(null);
             let sortableInstance = null;
 
             const saveModeText = computed(() => db ? '雲端' : '本機');
+
+            // 匯率抓取功能 (ExchangeRate-API)
+            const fetchExchangeRate = async () => {
+                isFetchingRate.value = true;
+                try {
+                    const res = await fetch('https://api.exchangerate-api.com/v4/latest/HKD');
+                    const data = await res.json();
+                    if(data && data.rates && data.rates.TWD) {
+                        exchangeRate.value = parseFloat(data.rates.TWD.toFixed(2));
+                        const now = new Date();
+                        lastRateUpdate.value = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+                        updateData(); // 儲存更新後的匯率
+                        alert(`匯率已更新！目前 1 HKD ≈ ${exchangeRate.value} TWD`);
+                    } else {
+                        alert("無法取得匯率資料，請稍後再試。");
+                    }
+                } catch(e) {
+                    console.error(e);
+                    alert("匯率更新失敗，請檢查網路連線。");
+                } finally {
+                    isFetchingRate.value = false;
+                }
+            };
 
             // 初始化 Sortable
             const initSortable = () => {
@@ -579,9 +596,30 @@
 
             watch(activeDay, () => { nextTick(initSortable); });
 
+            // 初始化分帳預設值 (全選)
+            watch(people, (newPeople) => {
+                // 當成員變動時，確保 involvedMembers 包含所有人 (如果是新的 expense)
+                if(newExpense.value.involvedMembers.length === 0) {
+                    newExpense.value.involvedMembers = [...newPeople];
+                }
+                // 初始化 customAmounts
+                newPeople.forEach(p => {
+                    if(!(p in newExpense.value.customAmounts)) {
+                        newExpense.value.customAmounts[p] = 0;
+                    }
+                });
+            }, { immediate: true });
+
+            const customTotal = computed(() => {
+                let sum = 0;
+                for(let p in newExpense.value.customAmounts) {
+                    sum += (newExpense.value.customAmounts[p] || 0);
+                }
+                return sum;
+            });
+
             onMounted(() => {
                 if (db && tripRef) {
-                    // 雲端模式：從 Firebase 讀取
                     onValue(tripRef, (snapshot) => {
                         const data = snapshot.val();
                         if (data) {
@@ -591,7 +629,6 @@
                         }
                     });
                 } else {
-                    // 本機模式：從 LocalStorage 讀取
                     const localData = localStorage.getItem('hk_trip_' + tripId);
                     if (localData) {
                         loadDataIntoVue(JSON.parse(localData));
@@ -601,7 +638,6 @@
                 fetchWeather();
             });
 
-            // 統一讀取資料的 Helper
             const loadDataIntoVue = (data) => {
                 tripDays.value = data.tripDays || tripDays.value;
                 expenses.value = data.expenses || [];
@@ -625,10 +661,8 @@
                 };
 
                 if (db && tripRef) {
-                    // 雲端儲存
                     set(tripRef, dataToSave).then(() => setTimeout(() => syncStatus.value = 'done', 500));
                 } else {
-                    // 本機儲存
                     localStorage.setItem('hk_trip_' + tripId, JSON.stringify(dataToSave));
                     setTimeout(() => syncStatus.value = 'done', 300);
                 }
@@ -643,28 +677,21 @@
             }, { deep: true });
 
             const addDay = () => { 
-                tripDays.value.push({ 
-                    events: [] 
-                }); 
+                tripDays.value.push({ events: [] }); 
                 activeDay.value = tripDays.value.length - 1; 
                 updateData(); 
             };
             
             const removeDay = (index) => {
                 if(tripDays.value.length <= 1) return alert("至少需保留一天行程！");
-                
                 if(confirm(`確定要刪除 Day ${index + 1} 的所有行程嗎？\n此動作無法復原。`)) {
                     tripDays.value.splice(index, 1);
-                    // 確保 activeDay 不會超出範圍
-                    if(activeDay.value >= tripDays.value.length) {
-                        activeDay.value = Math.max(0, tripDays.value.length - 1);
-                    }
+                    if(activeDay.value >= tripDays.value.length) activeDay.value = Math.max(0, tripDays.value.length - 1);
                     updateData();
                 }
             };
 
             const addEvent = () => { tripDays.value[activeDay.value].events.push({ type: 'event', time: '12:00', title: '', isEditing: true, id: Date.now() }); };
-            
             const addFlight = () => {
                 tripDays.value[activeDay.value].events.push({ 
                     type: 'flight', 
@@ -675,15 +702,44 @@
                 });
                 updateData();
             };
-
             const removeEvent = (i) => { tripDays.value[activeDay.value].events.splice(i, 1); updateData(); };
             
+            // 新增消費邏輯更新
             const addExpense = () => {
-                if(!newExpense.value.item || !newExpense.value.amount) return;
-                expenses.value.unshift({ ...newExpense.value });
-                newExpense.value = { item: '', amount: '', payer: '我' };
+                const { item, amount, payer, splitType, involvedMembers, customAmounts } = newExpense.value;
+                
+                if(!item || !amount) return alert("請輸入項目和金額");
+                
+                // 驗證自訂金額是否正確
+                if(splitType === 'custom') {
+                    if(customTotal.value !== amount) return alert(`分配金額總和 ($${customTotal.value}) 不等於總金額 ($${amount})`);
+                } else {
+                    if(involvedMembers.length === 0) return alert("請至少選擇一位分帳成員");
+                }
+
+                // 深拷貝 customAmounts 以免後續修改影響已存資料
+                const savedCustomAmounts = JSON.parse(JSON.stringify(customAmounts));
+
+                expenses.value.unshift({ 
+                    item, 
+                    amount, 
+                    payer, 
+                    splitType,
+                    involvedMembers: [...involvedMembers], // 複製陣列
+                    customAmounts: savedCustomAmounts
+                });
+                
+                // 重置表單 (保留 payer 和模式)
+                newExpense.value.item = '';
+                newExpense.value.amount = '';
+                // 這裡不重置成員選擇，方便連續記帳
+                // newExpense.value.involvedMembers = [...people.value]; 
+                // newExpense.value.customAmounts = {}; // customAmounts 歸零
+                people.value.forEach(p => newExpense.value.customAmounts[p] = 0);
+
                 updateData();
             };
+
             const removeExpense = (i) => { expenses.value.splice(i, 1); updateData(); };
 
             const addPerson = () => {
@@ -703,18 +759,44 @@
             };
 
             const totalExpense = computed(() => expenses.value.reduce((sum, item) => sum + (item.amount || 0), 0));
+            
+            // 核心分帳邏輯 (Balance Calculation)
             const balances = computed(() => {
                 let bal = {};
-                people.value.forEach(p => bal[p] = { paid: 0, balance: 0 });
+                // 初始化每個人
+                people.value.forEach(p => bal[p] = { paid: 0, shouldPay: 0, balance: 0 });
+                
                 expenses.value.forEach(exp => {
-                    if(bal[exp.payer]) bal[exp.payer].paid += exp.amount;
+                    const payer = exp.payer;
+                    const amount = exp.amount;
+                    
+                    // 1. 記錄誰先付錢 (Credit)
+                    if(bal[payer]) bal[payer].paid += amount;
+
+                    // 2. 記錄誰該付錢 (Debit)
+                    if (exp.splitType === 'custom') {
+                        // 自訂模式：直接取用設定好的金額
+                        for (let person in exp.customAmounts) {
+                            if(bal[person]) bal[person].shouldPay += (exp.customAmounts[person] || 0);
+                        }
+                    } else {
+                        // 均分模式：總金額 / 人數
+                        // 相容舊資料 (沒有 involvedMembers 欄位時預設全部分)
+                        const involved = (exp.involvedMembers && exp.involvedMembers.length > 0) ? exp.involvedMembers : people.value;
+                        const splitAmount = amount / involved.length;
+                        involved.forEach(person => {
+                            if(bal[person]) bal[person].shouldPay += splitAmount;
+                        });
+                    }
                 });
-                const count = people.value.length;
-                if(count === 0) return bal;
-                const avg = totalExpense.value / count;
-                for(let p in bal) bal[p].balance = Math.round(bal[p].paid - avg);
+
+                // 3. 計算最終結餘 (正數=應收，負數=應付)
+                for(let p in bal) {
+                    bal[p].balance = Math.round(bal[p].paid - bal[p].shouldPay);
+                }
                 return bal;
             });
+
             const formatNumber = (num) => new Intl.NumberFormat().format(Math.round(num));
 
             const copyLink = () => {
@@ -735,7 +817,6 @@
             };
 
             const switchTab = async (tab) => {
-                if (currentTab.value === 'translator' && tab !== 'translator') stopCamera();
                 currentTab.value = tab;
                 if (tab === 'map') {
                     await nextTick();
@@ -745,58 +826,6 @@
                 }
                 if (tab === 'itinerary') nextTick(initSortable);
             };
-
-            const initCamera = async () => {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    if (videoRef.value) {
-                        videoRef.value.srcObject = stream;
-                        cameraActive.value = true;
-                    }
-                } catch (err) { alert("無法啟動相機"); console.error(err); }
-            };
-
-            const stopCamera = () => {
-                if (videoRef.value && videoRef.value.srcObject) {
-                    videoRef.value.srcObject.getTracks().forEach(track => track.stop());
-                    videoRef.value.srcObject = null;
-                }
-                cameraActive.value = false;
-            };
-
-            const captureAndTranslate = async () => {
-                if (!videoRef.value || !canvasRef.value) return;
-                processing.value = true;
-                processStatus.value = '正在辨識文字...';
-                originalText.value = '';
-                translationResult.value = '';
-
-                const video = videoRef.value;
-                const canvas = canvasRef.value;
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                canvas.getContext('2d').drawImage(video, 0, 0);
-
-                try {
-                    const { data: { text } } = await Tesseract.recognize(canvas, sourceLang.value, { logger: m => { if(m.status === 'recognizing text') processStatus.value = `辨識中 ${Math.round(m.progress * 100)}%`; }});
-                    const cleanText = text.replace(/\n/g, ' ').trim();
-                    originalText.value = cleanText;
-                    if (!cleanText) { alert("未能辨識出文字"); processing.value = false; return; }
-
-                    processStatus.value = '翻譯中...';
-                    let apiSource = 'en';
-                    if (sourceLang.value === 'jpn') apiSource = 'ja';
-                    else if (sourceLang.value === 'kor') apiSource = 'ko';
-                    else if (sourceLang.value === 'chi_sim') apiSource = 'zh-CN';
-                    
-                    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=${apiSource}|zh-TW`);
-                    const data = await res.json();
-                    if (data.responseData) translationResult.value = data.responseData.translatedText;
-                    else translationResult.value = "翻譯失敗";
-                } catch (err) { console.error(err); alert("處理發生錯誤"); } finally { processing.value = false; }
-            };
-
-            onUnmounted(() => stopCamera());
 
             const initMap = () => {
                 mapInstance = L.map('map-container').setView([22.3193, 114.1694], 13);
@@ -838,16 +867,14 @@
             };
 
             return {
-                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText,
+                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal,
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
                     if (currentTab.value === 'map') return 'Map';
-                    if (currentTab.value === 'translator') return 'Translator';
                 }),
-                addDay, removeDay, addEvent, addFlight, removeEvent, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, locateUser, refreshMapMarkers,
+                addDay, removeDay, addEvent, addFlight, removeEvent, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, locateUser, refreshMapMarkers, fetchExchangeRate,
                 newPersonName, addPerson, removePerson,
-                videoRef, canvasRef, cameraActive, processing, processStatus, originalText, translationResult, sourceLang, initCamera, captureAndTranslate,
                 eventListRef
             };
         }
