@@ -84,7 +84,7 @@
 
 <div id="app" class="flex flex-col h-full bg-slate-50 relative group">
     
-    <!-- 頂部狀態列與封面 -->
+    <!-- 頂部狀態列與封面 (行程頁面專用) -->
     <div v-if="currentTab === 'itinerary'" class="relative h-64 w-full shrink-0 overflow-hidden rounded-b-[3rem] shadow-soft z-10 bg-white">
         <img :src="tripDays[activeDay]?.coverImage || 'https://images.unsplash.com/photo-1558273636-194160a2b843?q=80&w=800&auto=format&fit=crop'" 
              class="absolute inset-0 w-full h-full object-cover opacity-90 transition-opacity duration-700">
@@ -93,10 +93,18 @@
         <div class="absolute top-0 w-full p-6 pt-12 flex justify-between items-start text-white">
             <div>
                 <div class="flex items-center gap-2 opacity-90 mb-1">
-                    <span class="text-xs font-medium tracking-widest uppercase bg-black/20 px-2 py-0.5 rounded backdrop-blur-sm">Trip ID: {{ tripId.substring(0,6) }}...</span>
+                    <span class="text-xs font-medium tracking-widest uppercase bg-black/20 px-2 py-0.5 rounded backdrop-blur-sm">ID: {{ tripId.substring(0,6) }}</span>
                     <button @click="copyLink" class="bg-white/20 hover:bg-white/40 p-1.5 rounded-full backdrop-blur-md transition">
                         <i class="fas fa-share-alt text-xs"></i>
                     </button>
+                    
+                    <!-- 儲存狀態指示燈 (行程頁) -->
+                    <span v-if="syncStatus === 'syncing'" class="text-[10px] font-bold bg-yellow-400/90 text-black px-2 py-0.5 rounded backdrop-blur-sm shadow-sm transition-all">
+                        <i class="fas fa-sync fa-spin mr-1"></i>儲存中...
+                    </span>
+                    <span v-else-if="syncStatus === 'done'" class="text-[10px] font-bold bg-green-400/90 text-black px-2 py-0.5 rounded backdrop-blur-sm shadow-sm transition-all">
+                        <i class="fas fa-check mr-1"></i>已儲存 ({{ saveModeText }})
+                    </span>
                 </div>
                 <h1 class="text-3xl font-bold drop-shadow-md">Hong Kong</h1>
             </div>
@@ -109,25 +117,37 @@
         </div>
 
         <div class="absolute bottom-4 left-0 w-full px-6">
-            <div class="flex space-x-3 overflow-x-auto pb-2 hide-scrollbar snap-x">
+            <div class="flex space-x-3 overflow-x-auto pb-2 hide-scrollbar snap-x items-center">
                 <button v-for="(day, index) in tripDays" :key="index" @click="activeDay = index" class="snap-center shrink-0 outline-none group">
                     <div :class="['px-4 py-2 rounded-2xl flex flex-col items-center min-w-[64px] transition-all duration-300 border', 
-                        activeDay === index ? 'bg-white text-dark shadow-lg scale-105 border-white' : 'bg-white/40 text-slate-600 border-white/20 hover:bg-white/60 backdrop-blur-md']">
+                        activeDay === index ? 'bg-white text-dark shadow-lg scale-105 border-white' : 'bg-white/40 text-slate-700 border-white/20 hover:bg-white/60 backdrop-blur-md']">
                         <span class="text-[10px] font-bold tracking-wide uppercase opacity-70">Day</span>
                         <span class="text-xl font-bold">{{ index + 1 }}</span>
                     </div>
                 </button>
-                <button @click="addDay" class="snap-center shrink-0 px-4 py-2 rounded-2xl bg-white/40 text-white border border-white/20 flex items-center justify-center min-w-[64px] hover:bg-white/60 backdrop-blur-md transition">
-                    <i class="fas fa-plus"></i>
+                
+                <!-- 醒目的新增天數按鈕 -->
+                <button @click="addDay" class="snap-center shrink-0 px-4 py-2 rounded-2xl bg-white/95 text-primary border-2 border-white flex items-center justify-center min-w-[64px] shadow-lg shadow-black/10 hover:scale-105 transition-all duration-300 group">
+                    <i class="fas fa-plus text-xl group-hover:rotate-90 transition-transform duration-300"></i>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- 頂部標題 (其他分頁) -->
+    <!-- 頂部標題 (其他分頁用) -->
     <div v-else class="pt-12 pb-6 px-6 bg-white rounded-b-[2rem] shadow-sm z-10 shrink-0">
-        <h1 class="text-2xl font-bold text-dark">{{ currentTabName }}</h1>
-        <p class="text-slate-400 text-xs mt-1">Real-time Sync • {{ tripId }}</p>
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-2xl font-bold text-dark">{{ currentTabName }}</h1>
+                <!-- 儲存狀態指示 (通用頁面) -->
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-slate-400 text-xs">ID: {{ tripId.substring(0,6) }}</span>
+                    <span v-if="syncStatus === 'syncing'" class="text-xs font-bold text-yellow-500 bg-yellow-50 px-2 py-0.5 rounded-full"><i class="fas fa-circle-notch fa-spin mr-1"></i>儲存中...</span>
+                    <span v-else-if="syncStatus === 'done'" class="text-xs font-bold text-green-500 bg-green-50 px-2 py-0.5 rounded-full"><i class="fas fa-check-circle mr-1"></i>已儲存 ({{ saveModeText }})</span>
+                    <span v-else class="text-slate-300 text-xs">• 待機中</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 主要內容區 -->
@@ -457,13 +477,21 @@
     // 🔑 請在此填入 Firebase Key
     // ==========================================
     const firebaseConfig = {
-        // 請貼上你的 Config...
-    };
+  apiKey: "AIzaSyCVRY4qEL_4Q3fxHammQBKODlfrhuTP37U",
+  authDomain: "hk-tour.firebaseapp.com",
+  databaseURL: "https://hk-tour-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "hk-tour",
+  storageBucket: "hk-tour.firebasestorage.app",
+  messagingSenderId: "764791659242",
+  appId: "1:764791659242:web:f478ee64f1013067705593",
+  measurementId: "G-3RYVGRSDX7"
+};
 
     let db = null, tripRef = null, isRemoteUpdate = false;
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
     
+    // 如果網址沒有 ID，自動產生 ID
     if (!tripId) {
         tripId = 'trip_' + Math.random().toString(36).substr(2, 6);
         try {
@@ -472,11 +500,14 @@
         } catch (e) { console.log("預覽環境略過網址修改"); }
     }
 
+    // 初始化 Firebase (如果有 Key)
     if (firebaseConfig.apiKey) {
         const app = initializeApp(firebaseConfig);
         db = getDatabase(app);
         tripRef = dbRef(db, `trips/${tripId}`);
-        console.log("Connected to room:", tripId);
+        console.log("Connected to Cloud (Multiplayer):", tripId);
+    } else {
+        console.log("Firebase Key not found. Using LocalStorage (Single Player).");
     }
 
     createApp({
@@ -486,7 +517,6 @@
             const syncStatus = ref('idle');
             
             const activeDay = ref(0);
-            // 修改這裡：預設 events 為空陣列
             const tripDays = ref([
                 { 
                     coverImage: 'https://images.unsplash.com/photo-1558273636-194160a2b843?q=80&w=800', 
@@ -515,6 +545,8 @@
             const eventListRef = ref(null);
             let sortableInstance = null;
 
+            const saveModeText = computed(() => db ? '雲端' : '本機');
+
             // 初始化 Sortable
             const initSortable = () => {
                 if (sortableInstance) sortableInstance.destroy();
@@ -522,11 +554,10 @@
                 
                 sortableInstance = new Sortable(eventListRef.value, {
                     animation: 150,
-                    handle: '.drag-handle', // 只有點擊手柄才能拖曳
+                    handle: '.drag-handle',
                     ghostClass: 'sortable-ghost',
                     onEnd: (evt) => {
                         if (evt.oldIndex === evt.newIndex) return;
-                        // 更新數據模型
                         const list = tripDays.value[activeDay.value].events;
                         const item = list.splice(evt.oldIndex, 1)[0];
                         list.splice(evt.newIndex, 0, item);
@@ -535,44 +566,61 @@
                 });
             };
 
-            // 監聽 activeDay 變化以重新初始化 Sortable
-            watch(activeDay, () => {
-                nextTick(initSortable);
-            });
+            watch(activeDay, () => { nextTick(initSortable); });
 
             onMounted(() => {
-                if (tripRef) {
+                if (db && tripRef) {
+                    // 雲端模式：從 Firebase 讀取
                     onValue(tripRef, (snapshot) => {
                         const data = snapshot.val();
                         if (data) {
                             isRemoteUpdate = true;
-                            tripDays.value = data.tripDays || tripDays.value;
-                            expenses.value = data.expenses || [];
-                            exchangeRate.value = data.exchangeRate || 4.1;
-                            people.value = data.people || people.value;
-                            if(currentTab.value === 'map') refreshMapMarkers();
-                            syncStatus.value = 'done';
-                            // 數據更新後需重新綁定 Sortable
-                            nextTick(initSortable);
+                            loadDataIntoVue(data);
                             setTimeout(() => isRemoteUpdate = false, 100);
                         }
                     });
                 } else {
+                    // 本機模式：從 LocalStorage 讀取
+                    const localData = localStorage.getItem('hk_trip_' + tripId);
+                    if (localData) {
+                        loadDataIntoVue(JSON.parse(localData));
+                    }
                     nextTick(initSortable);
                 }
                 fetchWeather();
             });
 
+            // 統一讀取資料的 Helper
+            const loadDataIntoVue = (data) => {
+                tripDays.value = data.tripDays || tripDays.value;
+                expenses.value = data.expenses || [];
+                exchangeRate.value = data.exchangeRate || 4.1;
+                people.value = data.people || people.value;
+                if(currentTab.value === 'map') refreshMapMarkers();
+                syncStatus.value = 'done';
+                nextTick(initSortable);
+            };
+
             const updateData = () => {
-                if (!tripRef || isRemoteUpdate) return;
+                if (isRemoteUpdate) return;
                 syncStatus.value = 'syncing';
-                set(tripRef, {
+                
+                const dataToSave = {
                     tripDays: JSON.parse(JSON.stringify(tripDays.value)),
                     expenses: JSON.parse(JSON.stringify(expenses.value)),
                     exchangeRate: exchangeRate.value,
                     people: people.value,
                     lastUpdated: new Date().toISOString()
-                }).then(() => setTimeout(() => syncStatus.value = 'done', 500));
+                };
+
+                if (db && tripRef) {
+                    // 雲端儲存
+                    set(tripRef, dataToSave).then(() => setTimeout(() => syncStatus.value = 'done', 500));
+                } else {
+                    // 本機儲存
+                    localStorage.setItem('hk_trip_' + tripId, JSON.stringify(dataToSave));
+                    setTimeout(() => syncStatus.value = 'done', 300);
+                }
             };
 
             let timer;
@@ -593,7 +641,6 @@
             };
             const addEvent = () => { tripDays.value[activeDay.value].events.push({ type: 'event', time: '12:00', title: '', isEditing: true, id: Date.now() }); };
             
-            // 新增航班功能
             const addFlight = () => {
                 tripDays.value[activeDay.value].events.push({ 
                     type: 'flight', 
@@ -672,7 +719,6 @@
                     mapInstance.invalidateSize();
                     refreshMapMarkers();
                 }
-                // 切換回行程頁面時重新初始化 Sortable
                 if (tab === 'itinerary') nextTick(initSortable);
             };
 
@@ -740,7 +786,7 @@
                 const events = tripDays.value[activeDay.value]?.events || [];
                 const bounds = L.latLngBounds();
                 for (let event of events) {
-                    if (!event.title || event.type === 'flight') continue; // 航班暫不標記地圖
+                    if (!event.title || event.type === 'flight') continue; 
                     try {
                         const query = encodeURIComponent(`Hong Kong ${event.title}`);
                         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
@@ -768,7 +814,7 @@
             };
 
             return {
-                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, people, newExpense, balances, totalExpense, syncStatus,
+                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText,
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
