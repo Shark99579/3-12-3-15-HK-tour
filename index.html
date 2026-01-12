@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HK Trip Sync 🇭🇰</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        lake: { 50: '#f2faf9', 100: '#dff2f0', 200: '#c2e3e0', 300: '#98cec9', 400: '#6ab0a9', 500: '#4d948d', 600: '#3c7873', 700: '#32615d' },
+                        'warm-gray': '#f8f7f2',
+                        'soft-text': '#4a4a4a',
+                        'light-text': '#8c8c8c'
+                    },
+                    fontFamily: { sans: ['"Noto Sans TC"', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #eee; color: #4a4a4a; -webkit-tap-highlight-color: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        @media (min-width: 640px) {
+            body { display: flex; justify-content: center; min-height: 100vh; align-items: center; padding: 20px; }
+            #app { width: 100%; max-width: 414px; height: 850px; max-height: 90vh; border-radius: 30px; overflow: hidden; box-shadow: 0 20px 60px -15px rgba(77, 148, 141, 0.15); }
+        }
+        #map-container { height: 100%; width: 100%; z-index: 1; }
+        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; }
+        .leaflet-popup-content { margin: 10px 14px; font-family: 'Noto Sans TC'; font-size: 14px; }
+        
+        /* 同步狀態燈號 */
+        .sync-status { position: absolute; top: 1rem; right: 1rem; width: 8px; height: 8px; border-radius: 50%; z-index: 50; transition: all 0.3s; }
+        .sync-active { background-color: #fbbf24; box-shadow: 0 0 8px #fbbf24; } /* 黃燈：同步中 */
+        .sync-done { background-color: #34d399; box-shadow: 0 0 8px #34d399; }   /* 綠燈：已同步 */
+        .sync-error { background-color: #f87171; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="flex flex-col h-full bg-warm-gray relative">
+    
+    <div :class="['sync-status', syncStatusClass]" :title="syncStatusText"></div>
+
+    <header :class="['pt-12 pb-4 px-6 z-20 transition-all duration-300', currentTab === 'map' ? 'absolute top-0 left-0 w-full bg-white/80 backdrop-blur-md shadow-sm' : 'bg-warm-gray']">
+        <div class="flex justify-between items-end">
+            <div>
+                <h1 class="text-2xl font-light tracking-widest text-soft-text">香港散策。</h1>
+                <p class="text-lake-500 text-xs tracking-wider mt-1 flex items-center gap-1">
+                    <i class="fas fa-users text-[10px]"></i> {{ currentTabName }}
+                </p>
+            </div>
+            <div class="flex items-center gap-2 text-lake-600 bg-lake-100/50 px-3 py-1.5 rounded-full">
+                <i v-if="weather.icon" :class="weather.icon"></i>
+                <span class="text-sm font-medium">{{ weather.temp ? weather.temp + '°C' : '...' }}</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto hide-scrollbar relative bg-warm-gray">
+        
+        <div v-show="currentTab === 'itinerary'" class="px-6 pb-24 space-y-6 pt-4">
+            <div class="-mx-6 px-6">
+                <div class="flex space-x-4 overflow-x-auto pb-2 hide-scrollbar snap-x">
+                    <button v-for="(day, index) in tripDays" :key="index" @click="activeDay = index" class="snap-center outline-none">
+                        <div :class="['px-5 py-2.5 rounded-xl flex flex-col items-center min-w-[70px] transition-all', activeDay === index ? 'bg-lake-500 text-white shadow-md' : 'bg-white text-light-text border border-stone-100']">
+                            <span class="text-xs font-light opacity-80">DAY</span>
+                            <span class="text-xl font-medium">{{ index + 1 }}</span>
+                        </div>
+                    </button>
+                    <button @click="addDay" class="snap-center px-5 py-2.5 rounded-xl border border-stone-200 bg-white/50 text-stone-400 min-w-[70px]"><i class="fas fa-plus"></i></button>
+                </div>
+            </div>
+
+            <div class="space-y-5 relative min-h-[300px]">
+                <div class="absolute left-[7px] top-2 bottom-2 w-[1px] bg-stone-200"></div>
+                <div v-if="tripDays[activeDay]?.events.length === 0" class="text-center py-12 text-stone-300 font-light pl-4">
+                    <p>本日尚無行程</p>
+                </div>
+                <div v-for="(event, idx) in tripDays[activeDay]?.events" :key="idx" class="relative pl-8 group">
+                    <div class="absolute left-0 top-5 w-4 h-4 rounded-full bg-warm-gray border-[3px] border-lake-400 z-10"></div>
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-stone-100 transition-all hover:shadow-md">
+                        <div v-if="event.isEditing" class="space-y-3">
+                            <div class="flex justify-between"><span class="text-xs text-lake-500">編輯中...</span><button @click="removeEvent(idx)" class="text-red-300 text-xs">刪除</button></div>
+                            <input v-model="event.time" type="time" class="w-full bg-stone-50 p-2 rounded text-sm border-b border-stone-100">
+                            <input v-model="event.title" placeholder="地點" class="w-full bg-stone-50 p-2 rounded font-bold text-soft-text">
+                            <input v-model="event.note" placeholder="備註" class="w-full bg-stone-50 p-2 rounded text-sm text-light-text">
+                            <button @click="event.isEditing = false; updateData()" class="w-full bg-lake-500 text-white py-2 rounded-lg text-sm mt-2">完成</button>
+                        </div>
+                        <div v-else @click="event.isEditing = true">
+                            <div class="flex items-center gap-3 mb-1"><span class="text-lake-600 font-medium">{{ event.time }}</span></div>
+                            <h3 class="font-bold text-soft-text text-lg mb-1">{{ event.title }}</h3>
+                            <p class="text-light-text text-xs border-l-2 border-lake-100 pl-2">{{ event.note || '無備註' }}</p>
+                        </div>
+                    </div>
+                </div>
+                <button @click="addEvent" class="w-full py-4 border border-dashed border-lake-300/50 text-lake-400 rounded-2xl text-sm hover:bg-lake-50">+ 新增行程</button>
+            </div>
+        </div>
+
+        <div v-show="currentTab === 'wallet'" class="px-6 pb-24 space-y-6 pt-4">
+            <div class="bg-white rounded-xl p-3 flex justify-between items-center shadow-sm border border-stone-100">
+                <span class="text-xs text-lake-500 font-medium"><i class="fas fa-coins mr-1"></i>匯率設定</span>
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-light-text">1 HKD ≈ </span>
+                    <input v-model.number="exchangeRate" @change="updateData" type="number" step="0.1" class="w-16 bg-stone-50 text-center font-bold text-soft-text rounded border border-stone-200 outline-none">
+                    <span class="text-light-text">TWD</span>
+                </div>
+            </div>
+
+            <div class="bg-lake-500 text-white p-6 rounded-3xl relative overflow-hidden shadow-lg shadow-lake-500/30">
+                <div class="relative z-10">
+                    <h3 class="text-lake-100 text-xs font-light tracking-wider">總支出 (HKD)</h3>
+                    <div class="text-3xl font-light mb-1">${{ formatNumber(totalExpense) }}</div>
+                    <div class="text-xs text-lake-200">≈ NT$ {{ formatNumber(totalExpense * exchangeRate) }}</div>
+                    <div class="mt-4 bg-white/10 p-3 rounded-xl backdrop-blur-md">
+                        <div v-for="(person, name) in balances" :key="name" class="flex justify-between text-sm py-1 border-b border-white/10 last:border-0">
+                            <span>{{ name }}</span>
+                            <span :class="person.balance >= 0 ? 'text-teal-200' : 'text-rose-200'">{{ person.balance >= 0 ? '收' : '付' }} ${{ Math.abs(person.balance) }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-stone-100">
+                <h3 class="font-medium text-soft-text mb-3 text-sm">新增消費</h3>
+                <div class="space-y-3">
+                    <input v-model="newExpense.item" placeholder="項目" class="w-full bg-warm-gray p-3 rounded-xl text-sm outline-none">
+                    <div class="flex gap-3">
+                        <input v-model.number="newExpense.amount" type="number" placeholder="HKD" class="flex-1 bg-warm-gray p-3 rounded-xl text-sm outline-none">
+                        <select v-model="newExpense.payer" class="bg-warm-gray p-3 rounded-xl text-sm outline-none">
+                            <option v-for="p in people" :value="p">{{ p }} 先付</option>
+                        </select>
+                    </div>
+                    <button @click="addExpense" class="w-full bg-lake-500 text-white py-3 rounded-xl text-sm active:scale-95 transition-transform">記帳</button>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <div v-for="(exp, idx) in expenses" :key="idx" class="flex justify-between items-center bg-white p-4 rounded-2xl border border-stone-50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-lake-50 text-lake-600 flex items-center justify-center text-xs"><i class="fas fa-receipt"></i></div>
+                        <div>
+                            <div class="font-medium text-sm">{{ exp.item }}</div>
+                            <div class="text-[10px] text-light-text">{{ exp.payer }} • ≈NT${{ Math.round(exp.amount * exchangeRate) }}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="font-bold text-soft-text">${{ exp.amount }}</span>
+                        <button @click="removeExpense(idx)" class="text-stone-300 hover:text-red-400"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-show="currentTab === 'map'" class="w-full h-full relative bg-stone-200">
+            <div id="map-container"></div>
+            <div class="absolute bottom-28 right-4 flex flex-col gap-3 z-[400]">
+                <button @click="locateUser" class="w-12 h-12 bg-white text-lake-600 rounded-full shadow-lg flex items-center justify-center text-xl"><i class="fas fa-crosshairs"></i></button>
+                <button @click="refreshMapMarkers" class="w-12 h-12 bg-lake-600 text-white rounded-full shadow-lg flex items-center justify-center text-xl"><i class="fas fa-sync-alt"></i></button>
+            </div>
+        </div>
+    </main>
+
+    <nav class="fixed bottom-0 w-full max-w-[414px] bg-white/95 backdrop-blur border-t border-stone-100 px-8 py-3 pb-6 z-30 flex justify-between rounded-t-3xl">
+        <button @click="switchTab('itinerary')" :class="['flex flex-col items-center gap-1 w-16', currentTab === 'itinerary' ? 'text-lake-500' : 'text-stone-300']"><i class="fas fa-list-ul text-lg"></i><span class="text-[10px] font-medium">行程</span></button>
+        <button @click="switchTab('wallet')" :class="['flex flex-col items-center gap-1 w-16', currentTab === 'wallet' ? 'text-lake-500' : 'text-stone-300']"><i class="fas fa-wallet text-lg"></i><span class="text-[10px] font-medium">分帳</span></button>
+        <button @click="switchTab('map')" :class="['flex flex-col items-center gap-1 w-16', currentTab === 'map' ? 'text-lake-500' : 'text-stone-300']"><i class="fas fa-map-marked-alt text-lg"></i><span class="text-[10px] font-medium">地圖</span></button>
+    </nav>
+</div>
+
+<script type="module">
+    import { createApp, ref, computed, onMounted, nextTick, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getDatabase, ref as dbRef, onValue, set } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+    // -------------------------------------------------------------
+    // TODO: 
+const firebaseConfig = {
+  apiKey: "AIzaSyCVRY4qEL_4Q3fxHammQBKODlfrhuTP37U",
+  authDomain: "hk-tour.firebaseapp.com",
+  databaseURL: "https://hk-tour-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "hk-tour",
+  storageBucket: "hk-tour.firebasestorage.app",
+  messagingSenderId: "764791659242",
+  appId: "1:764791659242:web:f478ee64f1013067705593",
+  measurementId: "G-3RYVGRSDX7"
+};
+    // -------------------------------------------------------------
+    const firebaseConfig = {
+        // 替換這裡的內容，例如：
+        // apiKey: "AIzaSyB...",
+        // authDomain: "hk-trip-app.firebaseapp.com",
+        // databaseURL: "https://hk-trip-app-default-rtdb.firebaseio.com",
+        // projectId: "hk-trip-app",
+        // ...
+    };
+
+    // 初始化 Firebase
+    let db = null;
+    let tripRef = null;
+    let isRemoteUpdate = false; // 防止循環更新標記
+
+    // 如果使用者還沒填 Config，避免報錯
+    if (firebaseConfig.apiKey) {
+        const app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+        // 設定資料庫路徑：trips/hk_group_01 (多人用同一個 ID 就會同步)
+        tripRef = dbRef(db, 'trips/hk_group_01'); 
+    }
+
+    createApp({
+        setup() {
+            const currentTab = ref('itinerary');
+            const weather = ref({ temp: null, icon: null });
+            const syncStatus = ref('idle'); // idle, syncing, done, error
+            
+            // 資料模型
+            const exchangeRate = ref(4.1);
+            const people = ref(['我', '旅伴A']);
+            const expenses = ref([]);
+            const tripDays = ref([
+                { events: [{ time: '10:00', title: '抵達香港', note: '連線成功就會覆蓋此預設值', isEditing: false }] }
+            ]);
+            const activeDay = ref(0);
+            const newExpense = ref({ item: '', amount: '', payer: '我' });
+
+            // 地圖相關
+            let mapInstance = null;
+            let markers = [];
+            let userMarker = null;
+
+            // --- Firebase 同步邏輯 ---
+            
+            // 1. 監聽雲端資料變更 (下載)
+            onMounted(() => {
+                if (!tripRef) {
+                    alert('請記得在程式碼中填入 Firebase Config 才能同步喔！');
+                    return;
+                }
+                
+                onValue(tripRef, (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        isRemoteUpdate = true; // 標記為遠端更新，避免觸發 watch 寫回
+                        tripDays.value = data.tripDays || tripDays.value;
+                        expenses.value = data.expenses || [];
+                        exchangeRate.value = data.exchangeRate || 4.1;
+                        people.value = data.people || people.value;
+                        
+                        // 資料更新後，若地圖開啟中，需刷新
+                        if(currentTab.value === 'map') refreshMapMarkers();
+                        
+                        syncStatus.value = 'done';
+                        setTimeout(() => isRemoteUpdate = false, 100);
+                    }
+                }, (error) => {
+                    console.error(error);
+                    syncStatus.value = 'error';
+                });
+
+                // 抓天氣
+                fetchWeather();
+            });
+
+            // 2. 上傳資料 (寫入)
+            const updateData = () => {
+                if (!tripRef || isRemoteUpdate) return;
+
+                syncStatus.value = 'syncing';
+                set(tripRef, {
+                    tripDays: JSON.parse(JSON.stringify(tripDays.value)), // 深拷貝移除 Vue Proxy
+                    expenses: JSON.parse(JSON.stringify(expenses.value)),
+                    exchangeRate: exchangeRate.value,
+                    people: people.value,
+                    lastUpdated: new Date().toISOString()
+                }).then(() => {
+                    setTimeout(() => syncStatus.value = 'done', 500);
+                }).catch(err => {
+                    syncStatus.value = 'error';
+                    alert("同步失敗，請檢查網路或 Firebase 規則");
+                });
+            };
+
+            // 使用 watch 監控主要數據變動，自動存檔 (防手抖 Debounce)
+            let debounceTimer;
+            watch([tripDays, expenses, exchangeRate], () => {
+                if(isRemoteUpdate) return;
+                clearTimeout(debounceTimer);
+                syncStatus.value = 'syncing';
+                debounceTimer = setTimeout(updateData, 1000); // 停止輸入 1 秒後才上傳
+            }, { deep: true });
+
+
+            // --- 既有功能邏輯 ---
+
+            const totalExpense = computed(() => expenses.value.reduce((sum, item) => sum + (item.amount || 0), 0));
+            const balances = computed(() => {
+                let bal = {};
+                people.value.forEach(p => bal[p] = { paid: 0, balance: 0 });
+                expenses.value.forEach(exp => {
+                    if(bal[exp.payer] && exp.amount) bal[exp.payer].paid += exp.amount;
+                });
+                const count = people.value.length;
+                if(count === 0) return bal;
+                const avg = totalExpense.value / count;
+                for(let p in bal) bal[p].balance = Math.round(bal[p].paid - avg);
+                return bal;
+            });
+
+            const currentTabName = computed(() => {
+                if(currentTab.value === 'itinerary') return `Day ${activeDay.value + 1}`;
+                if(currentTab.value === 'wallet') return '共用錢包';
+                return '地圖';
+            });
+
+            const syncStatusClass = computed(() => {
+                if(syncStatus.value === 'syncing') return 'sync-active';
+                if(syncStatus.value === 'done') return 'sync-done';
+                if(syncStatus.value === 'error') return 'sync-error';
+                return 'bg-gray-300';
+            });
+            const syncStatusText = computed(() => syncStatus.value === 'syncing' ? '同步中...' : '已同步');
+
+            // 操作函數
+            const addDay = () => { tripDays.value.push({ events: [] }); activeDay.value = tripDays.value.length - 1; updateData(); };
+            const addEvent = () => { tripDays.value[activeDay.value].events.push({ time: '12:00', title: '', isEditing: true }); }; // 這裡不直接存，等編輯完
+            const removeEvent = (i) => { tripDays.value[activeDay.value].events.splice(i, 1); updateData(); };
+            const addExpense = () => {
+                if(!newExpense.value.item || !newExpense.value.amount) return;
+                expenses.value.unshift({ ...newExpense.value });
+                newExpense.value = { item: '', amount: '', payer: '我' };
+                updateData();
+            };
+            const removeExpense = (i) => { expenses.value.splice(i, 1); updateData(); };
+            const formatNumber = (num) => new Intl.NumberFormat().format(Math.round(num));
+
+            // 地圖與天氣
+            const fetchWeather = async () => {
+                try {
+                    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=22.31&longitude=114.16&current_weather=true');
+                    const d = await res.json();
+                    if(d.current_weather) {
+                        weather.value.temp = Math.round(d.current_weather.temperature);
+                        const c = d.current_weather.weathercode;
+                        weather.value.icon = c <= 1 ? 'fas fa-sun text-yellow-400' : (c <= 60 ? 'fas fa-cloud text-stone-400' : 'fas fa-umbrella text-lake-500');
+                    }
+                } catch(e) {}
+            };
+
+            const switchTab = async (tab) => {
+                currentTab.value = tab;
+                if (tab === 'map') {
+                    await nextTick();
+                    if(!mapInstance) initMap();
+                    mapInstance.invalidateSize();
+                    refreshMapMarkers();
+                }
+            };
+
+            const initMap = () => {
+                mapInstance = L.map('map-container').setView([22.3193, 114.1694], 13);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO' }).addTo(mapInstance);
+            };
+
+            const refreshMapMarkers = async () => {
+                if (!mapInstance || !tripDays.value[activeDay.value]) return;
+                markers.forEach(m => mapInstance.removeLayer(m));
+                markers = [];
+                const events = tripDays.value[activeDay.value].events;
+                const bounds = L.latLngBounds();
+
+                for (let event of events) {
+                    if (!event.title) continue;
+                    try {
+                        const query = encodeURIComponent(`Hong Kong ${event.title}`);
+                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
+                        const data = await res.json();
+                        if (data && data.length > 0) {
+                            const { lat, lon } = data[0];
+                            const marker = L.marker([lat, lon]).addTo(mapInstance).bindPopup(`<b>${event.title}</b><br>${event.time}`);
+                            markers.push(marker);
+                            bounds.extend([lat, lon]);
+                        }
+                    } catch (e) {}
+                    await new Promise(r => setTimeout(r, 600)); 
+                }
+                if (markers.length > 0) mapInstance.fitBounds(bounds, { padding: [50, 50] });
+            };
+
+            const locateUser = () => {
+                if (!navigator.geolocation) return;
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        const { latitude, longitude } = pos.coords;
+                        if (userMarker) mapInstance.removeLayer(userMarker);
+                        const userIcon = L.divIcon({ className: 'custom-user-icon', html: '<div style="width:16px;height:16px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(0,0,0,0.3);"></div>', iconSize: [16, 16] });
+                        userMarker = L.marker([latitude, longitude], { icon: userIcon }).addTo(mapInstance);
+                        mapInstance.setView([latitude, longitude], 15);
+                    }
+                );
+            };
+
+            return {
+                currentTab, currentTabName, weather, switchTab, syncStatusClass, syncStatusText,
+                activeDay, tripDays, addDay, addEvent, removeEvent, updateData,
+                exchangeRate, people, expenses, newExpense, addExpense, removeExpense, totalExpense, balances, formatNumber,
+                locateUser, refreshMapMarkers
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
+
