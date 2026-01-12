@@ -7,10 +7,6 @@
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Leaflet CSS (地圖) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- SortableJS (拖曳排序) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <!-- FontAwesome Icons -->
@@ -62,10 +58,6 @@
         /* 拖曳時的樣式 */
         .sortable-ghost { opacity: 0.4; background: #f0f9ff; border: 2px dashed #2DD4BF; }
         .drag-handle { cursor: move; touch-action: none; }
-
-        /* 地圖 Popup */
-        .leaflet-popup-content-wrapper { border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0; }
-        .leaflet-popup-content { margin: 12px 16px; font-family: 'Noto Sans TC'; font-size: 14px; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -208,7 +200,7 @@
                             <div v-if="event.isEditing" class="p-4 space-y-3">
                                 <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide">
                                     <span :class="event.type==='flight'?'text-blue-500':'text-primary'">{{ event.type === 'flight' ? 'Flight Details' : 'Event Details' }}</span>
-                                    <!-- 編輯模式下的刪除按鈕 (保留給不習慣滑動的人) -->
+                                    <!-- 編輯模式下的刪除按鈕 -->
                                     <button @click="removeEvent(idx)" class="text-slate-300 hover:text-red-400 px-2 py-1"><i class="fas fa-trash"></i></button>
                                 </div>
 
@@ -285,10 +277,6 @@
                                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition">
                                             <i class="fas fa-location-arrow"></i> 導航
                                         </a>
-                                        <!-- 新增：切換到 App 內建地圖 -->
-                                        <button @click.stop="switchTab('map')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-50 text-rose-600 text-[10px] font-bold hover:bg-rose-100 transition">
-                                            <i class="fas fa-map"></i> 查看地圖
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -450,25 +438,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Tab 3: 全螢幕地圖 -->
-        <div v-show="currentTab === 'map'" class="absolute inset-0 z-0 bg-slate-200">
-            <div id="map-container" class="w-full h-full"></div>
-            <div class="absolute bottom-32 right-6 flex flex-col gap-3 z-[400]">
-                <button @click="locateUser" class="w-14 h-14 bg-white text-primary rounded-full shadow-float flex items-center justify-center text-xl active:scale-90 transition-transform"><i class="fas fa-location-crosshairs"></i></button>
-                <button @click="refreshMapMarkers" class="w-14 h-14 bg-dark text-white rounded-full shadow-float flex items-center justify-center text-xl active:scale-90 transition-transform"><i class="fas fa-rotate"></i></button>
-            </div>
-            <div class="absolute top-4 left-4 right-4 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-soft z-[400] border border-white/50">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h4 class="text-xs font-bold text-slate-400 uppercase">Map View</h4>
-                        <p class="text-sm font-bold text-dark">Day {{ activeDay + 1 }} 行程地圖</p>
-                    </div>
-                    <span class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded font-bold" v-if="syncStatus === 'done'">已同步</span>
-                    <span class="text-xs bg-yellow-100 text-yellow-600 px-2 py-1 rounded font-bold" v-else-if="syncStatus === 'syncing'">更新中...</span>
-                </div>
-            </div>
-        </div>
         
     </main>
 
@@ -482,10 +451,6 @@
             <button @click="switchTab('wallet')" :class="['relative flex flex-col items-center gap-1 w-16 transition-all duration-300', currentTab === 'wallet' ? 'text-indigo-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
                 <div :class="['text-xl transition-all', currentTab === 'wallet' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-wallet"></i></div>
                 <span class="text-[10px] font-bold">Wallet</span>
-            </button>
-            <button @click="switchTab('map')" :class="['relative flex flex-col items-center gap-1 w-16 transition-all duration-300', currentTab === 'map' ? 'text-rose-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
-                <div :class="['text-xl transition-all', currentTab === 'map' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-map"></i></div>
-                <span class="text-[10px] font-bold">Map</span>
             </button>
         </div>
     </nav>
@@ -510,7 +475,6 @@ const firebaseConfig = {
   appId: "1:764791659242:web:f478ee64f1013067705593",
   measurementId: "G-3RYVGRSDX7"
 };
-
     let db = null, tripRef = null, isRemoteUpdate = false;
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
@@ -564,8 +528,6 @@ const firebaseConfig = {
             });
             const newPersonName = ref('');
 
-            let mapInstance = null, markers = [], userMarker = null;
-
             // Sortable 相關
             const eventListRef = ref(null);
             let sortableInstance = null;
@@ -573,6 +535,7 @@ const firebaseConfig = {
             // Swipe 相關狀態
             const touchStartX = ref(0);
             const activeSwipeIndex = ref(-1); // 當前打開刪除按鈕的 index
+            const initialSwipeOffset = ref(0);
 
             const saveModeText = computed(() => db ? '雲端' : '本機');
 
@@ -702,6 +665,9 @@ const firebaseConfig = {
             // Swipe Handlers
             const touchStart = (e, idx) => {
                 touchStartX.value = e.touches[0].clientX;
+                const event = tripDays.value[activeDay.value].events[idx];
+                initialSwipeOffset.value = event.swipeOffset || 0;
+
                 // 如果點擊其他卡片，關閉已打開的
                 if (activeSwipeIndex.value !== -1 && activeSwipeIndex.value !== idx) {
                     const list = tripDays.value[activeDay.value].events;
@@ -715,21 +681,24 @@ const firebaseConfig = {
                 const diff = currentX - touchStartX.value;
                 const event = tripDays.value[activeDay.value].events[idx];
                 
-                // 只允許向左滑 (diff < 0)
-                if (diff < 0 && diff > -100) {
-                    event.swipeOffset = diff;
-                }
+                // 計算目標位移
+                let targetOffset = initialSwipeOffset.value + diff;
+
+                // 限制範圍：最多左滑到 -100px (顯示刪除)，右滑不能超過 0 (關閉)
+                if (targetOffset > 0) targetOffset = 0;
+                if (targetOffset < -100) targetOffset = -100;
+
+                event.swipeOffset = targetOffset;
             };
 
             const touchEnd = (e, idx) => {
                 const event = tripDays.value[activeDay.value].events[idx];
-                if (event.swipeOffset < -60) {
-                    // 滑動超過閾值，固定顯示刪除鈕
-                    event.swipeOffset = -80; 
+                // 判斷閾值：如果滑動超過 -40px 就自動吸附到開啟狀態，否則關閉
+                if (event.swipeOffset < -40) {
+                    event.swipeOffset = -80; // 吸附到開啟
                     activeSwipeIndex.value = idx;
                 } else {
-                    // 回彈
-                    event.swipeOffset = 0;
+                    event.swipeOffset = 0; // 吸附到關閉
                     if (activeSwipeIndex.value === idx) activeSwipeIndex.value = -1;
                 }
             };
@@ -759,7 +728,6 @@ const firebaseConfig = {
                 expenses.value = data.expenses || [];
                 exchangeRate.value = data.exchangeRate || 4.1;
                 people.value = data.people || people.value;
-                if(currentTab.value === 'map') refreshMapMarkers();
                 syncStatus.value = 'done';
                 nextTick(initSortable);
             };
@@ -808,7 +776,6 @@ const firebaseConfig = {
             };
 
             const addEvent = () => { 
-                // 新增時自動計算時間
                 const list = tripDays.value[activeDay.value].events;
                 let newTime = '10:00';
                 if (list.length > 0) {
@@ -825,7 +792,6 @@ const firebaseConfig = {
                     id: Date.now(),
                     swipeOffset: 0
                 }); 
-                // 自動更新會由 watch 觸發 updateData
             };
             
             const addFlight = () => {
@@ -834,13 +800,13 @@ const firebaseConfig = {
                 if (list.length > 0) {
                     const last = list[list.length - 1];
                     const refTime = (last.type === 'flight') ? last.arrTime : last.time;
-                    if (refTime) newDep = addMinutes(refTime, 60); // 航班通常間隔久一點
+                    if (refTime) newDep = addMinutes(refTime, 60); 
                 }
 
                 tripDays.value[activeDay.value].events.push({ 
                     type: 'flight', 
                     depCode: '', depTime: newDep,
-                    arrCode: '', arrTime: addMinutes(newDep, 120), // 預設飛2小時
+                    arrCode: '', arrTime: addMinutes(newDep, 120), 
                     title: '', isEditing: true,
                     id: Date.now(),
                     swipeOffset: 0
@@ -850,8 +816,8 @@ const firebaseConfig = {
 
             const removeEvent = (i) => { 
                 tripDays.value[activeDay.value].events.splice(i, 1); 
-                activeSwipeIndex.value = -1; // 重置狀態
-                autoAdjustTimes(); // 刪除後也自動調整後續時間
+                activeSwipeIndex.value = -1; 
+                autoAdjustTimes(); 
                 updateData(); 
             };
             
@@ -937,66 +903,7 @@ const firebaseConfig = {
 
             const switchTab = async (tab) => {
                 currentTab.value = tab;
-                
-                if (tab === 'map') {
-                    // Wait for Vue to update the DOM (v-show to take effect)
-                    await nextTick();
-                    
-                    // Initialize map if it doesn't exist
-                    if (!mapInstance) {
-                        initMap();
-                    }
-                    
-                    // CRITICAL: Force Leaflet to recalculate container size
-                    // Use a small timeout to ensure the browser has painted the layout change
-                    setTimeout(() => {
-                        if (mapInstance) {
-                            mapInstance.invalidateSize();
-                            refreshMapMarkers();
-                        }
-                    }, 200); 
-                }
-                
                 if (tab === 'itinerary') nextTick(initSortable);
-            };
-
-            const initMap = () => {
-                mapInstance = L.map('map-container').setView([22.3193, 114.1694], 13);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO' }).addTo(mapInstance);
-            };
-
-            const refreshMapMarkers = async () => {
-                if (!mapInstance) return;
-                markers.forEach(m => mapInstance.removeLayer(m));
-                markers = [];
-                const events = tripDays.value[activeDay.value]?.events || [];
-                const bounds = L.latLngBounds();
-                for (let event of events) {
-                    if (!event.title || event.type === 'flight') continue; 
-                    try {
-                        const query = encodeURIComponent(`Hong Kong ${event.title}`);
-                        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
-                        const data = await res.json();
-                        if (data && data.length > 0) {
-                            const { lat, lon } = data[0];
-                            const marker = L.marker([lat, lon]).addTo(mapInstance).bindPopup(`<b>${event.title}</b><br>${event.time}`);
-                            markers.push(marker);
-                            bounds.extend([lat, lon]);
-                        }
-                    } catch (e) {}
-                }
-                if (markers.length > 0) mapInstance.fitBounds(bounds, { padding: [80, 80] });
-            };
-            
-            const locateUser = () => {
-                navigator.geolocation.getCurrentPosition(pos => {
-                    const { latitude, longitude } = pos.coords;
-                    if (userMarker) mapInstance.removeLayer(userMarker);
-                    userMarker = L.marker([latitude, longitude], { 
-                        icon: L.divIcon({ html: '<div style="width:16px;height:16px;background:#3b82f6;border:3px solid white;border-radius:50%;box-shadow:0 0 10px rgba(0,0,0,0.3);"></div>' }) 
-                    }).addTo(mapInstance);
-                    mapInstance.setView([latitude, longitude], 15);
-                });
             };
 
             return {
@@ -1004,11 +911,10 @@ const firebaseConfig = {
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
-                    if (currentTab.value === 'map') return 'Map';
                 }),
-                addDay, removeDay, addEvent, addFlight, removeEvent, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, locateUser, refreshMapMarkers, fetchExchangeRate,
+                addDay, removeDay, addEvent, addFlight, removeEvent, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate,
                 newPersonName, addPerson, removePerson, autoAdjustTimes,
-                eventListRef, touchStart, touchMove, touchEnd // 記得導出 Swipe handlers
+                eventListRef, touchStart, touchMove, touchEnd 
             };
         }
     }).mount('#app');
