@@ -98,7 +98,7 @@
 
         <div class="absolute bottom-4 left-0 w-full px-6">
             <div class="flex space-x-3 overflow-x-auto pb-4 pt-4 hide-scrollbar snap-x items-end">
-                <!-- 日期卡片 -->
+                <!-- 日期卡片 (固定四天) -->
                 <div v-for="(day, index) in tripDays" :key="index" class="snap-center shrink-0 relative group">
                     <button @click="activeDay = index" class="outline-none block">
                         <div :class="['px-4 py-2 rounded-2xl flex flex-col items-center min-w-[64px] transition-all duration-300 border', 
@@ -107,7 +107,9 @@
                             <span class="text-xl font-bold">{{ index + 1 }}</span>
                         </div>
                     </button>
+                    <!-- 刪除按鈕已移除 -->
                 </div>
+                <!-- 新增按鈕已移除 -->
             </div>
         </div>
     </div>
@@ -146,8 +148,8 @@
                 </div>
             </div>
 
-            <!-- 拖曳容器 -->
-            <div ref="eventListRef" class="space-y-4 pb-2">
+            <!-- 拖曳容器 Sortable Container -->
+            <div ref="eventListRef" class="space-y-4 pb-2 min-h-[50px]">
                 <div v-for="(event, idx) in currentDay?.events" :key="event.id || idx" 
                      :class="['relative transition-all duration-300', event.type === 'flight' ? 'pl-2' : 'pl-14 last-item-check']">
                     
@@ -179,7 +181,7 @@
                         >
                             
                             <!-- 拖曳把手 -->
-                            <div class="drag-handle absolute right-3 top-3 text-slate-300 p-2 hover:text-slate-500 z-20">
+                            <div class="drag-handle absolute right-3 top-3 text-slate-300 p-2 hover:text-slate-500 z-20 cursor-move">
                                 <i class="fas fa-bars"></i>
                             </div>
 
@@ -195,13 +197,13 @@
                                     <input v-model="event.title" placeholder="航班代號 (例: CX450)" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none focus:ring-1 focus:ring-blue-400">
                                     <div class="flex items-center gap-2">
                                         <div class="flex-1 space-y-1">
-                                            <label class="text-[10px] text-slate-400 font-bold uppercase">起飛 DEPARTURE</label>
+                                            <label class="text-[10px] text-slate-400 font-bold uppercase">起飛</label>
                                             <input v-model="event.depCode" @input="event.depCode = $event.target.value.toUpperCase()" placeholder="TPE" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
                                             <input v-model="event.depTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
                                         </div>
                                         <i class="fas fa-plane text-blue-300"></i>
                                         <div class="flex-1 space-y-1">
-                                            <label class="text-[10px] text-slate-400 font-bold uppercase">降落 ARRIVAL</label>
+                                            <label class="text-[10px] text-slate-400 font-bold uppercase">降落</label>
                                             <input v-model="event.arrCode" @input="event.arrCode = $event.target.value.toUpperCase()" placeholder="HKG" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
                                             <input v-model="event.arrTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
                                         </div>
@@ -255,6 +257,7 @@
                                         <i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}
                                     </p>
                                     <p v-else class="mb-3"></p>
+                                    <!-- 移除導航按鈕下方空間 -->
                                     <div class="flex gap-2">
                                         <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop 
                                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition">
@@ -268,8 +271,8 @@
                 </div>
             </div>
             
-            <!-- 底部新增按鈕 -->
-            <div v-if="currentDay?.events.length > 0" class="flex gap-3 mt-2">
+            <!-- 底部新增按鈕群 -->
+            <div v-if="currentDay?.events.length > 0" class="flex gap-3 mt-4">
                 <button @click="addEvent" class="flex-1 py-4 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-sm hover:bg-primary/5 transition-all">
                     <i class="fas fa-plus mr-1"></i> 行程
                 </button>
@@ -458,8 +461,6 @@ const firebaseConfig = {
   appId: "1:764791659242:web:f478ee64f1013067705593",
   measurementId: "G-3RYVGRSDX7"
 };
-
-
     let db = null, tripRef = null, isRemoteUpdate = false;
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
@@ -491,10 +492,7 @@ const firebaseConfig = {
             
             const activeDay = ref(0);
             const tripDays = ref([
-                { events: [] },
-                { events: [] },
-                { events: [] },
-                { events: [] }
+                { events: [] }, { events: [] }, { events: [] }, { events: [] }
             ]);
             const exchangeRate = ref(4.1);
             const lastRateUpdate = ref(''); 
@@ -694,7 +692,11 @@ const firebaseConfig = {
             });
 
             const loadDataIntoVue = (data) => {
-                tripDays.value = data.tripDays || tripDays.value;
+                // Ensure exactly 4 days structure if loading weird data
+                const loadedDays = data.tripDays || [];
+                while(loadedDays.length < 4) loadedDays.push({ events: [] });
+                tripDays.value = loadedDays.slice(0, 4);
+                
                 expenses.value = data.expenses || [];
                 exchangeRate.value = data.exchangeRate || 4.1;
                 people.value = data.people || people.value;
