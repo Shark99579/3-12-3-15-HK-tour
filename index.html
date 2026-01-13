@@ -7,6 +7,10 @@
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS (地圖) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- SortableJS (拖曳排序) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <!-- FontAwesome Icons -->
@@ -22,6 +26,8 @@
                         primary: '#2DD4BF', // 湖水綠 Teal-400
                         secondary: '#F0FDFA', // 淺湖水綠背景
                         accent: '#F43F5E',   // 點綴色 (Rose)
+                        food: '#F59E0B',     // 美食橘
+                        shop: '#EC4899',     // 購物粉
                         dark: '#334155',
                         'card-bg': '#ffffff',
                     },
@@ -64,7 +70,7 @@
 
 <div id="app" class="flex flex-col h-full bg-slate-50 relative group">
     
-    <!-- 頂部狀態列與封面 (行程頁面專用 - 純色版) -->
+    <!-- 頂部狀態列與封面 (行程頁面專用) -->
     <div v-if="currentTab === 'itinerary'" class="relative h-56 w-full shrink-0 overflow-hidden rounded-b-[3rem] shadow-soft z-10 bg-gradient-to-br from-teal-400 to-teal-600">
         <!-- 裝飾圓圈 -->
         <div class="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
@@ -107,9 +113,7 @@
                             <span class="text-xl font-bold">{{ index + 1 }}</span>
                         </div>
                     </button>
-                    <!-- 刪除按鈕已移除 -->
                 </div>
-                <!-- 新增按鈕已移除 -->
             </div>
         </div>
     </div>
@@ -141,7 +145,7 @@
                 <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300 text-2xl">
                     <i class="fas fa-map-marked-alt"></i>
                 </div>
-                <p class="text-slate-400 text-sm">這天還沒有計畫喔</p>
+                <p class="text-slate-400 text-sm">Day {{ activeDay + 1 }} 還沒有計畫喔</p>
                 <div class="flex gap-2 justify-center mt-4">
                      <button @click="addEvent" class="px-5 py-2 bg-primary text-white rounded-full text-sm font-bold shadow-lg shadow-primary/30">新增行程</button>
                      <button @click="addFlight" class="px-5 py-2 bg-white text-primary border border-primary rounded-full text-sm font-bold shadow-sm">新增航班</button>
@@ -162,9 +166,8 @@
 
                     <!-- 卡片外層容器 (處理滑動與刪除背景) -->
                     <div class="relative overflow-hidden rounded-3xl shadow-soft">
-                        
                         <!-- 刪除背景層 -->
-                        <div class="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 text-white z-0" @click="removeEvent(idx)">
+                        <div class="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 text-white z-0" @click="removeItem(idx)">
                             <div class="flex flex-col items-center gap-1 font-bold text-xs">
                                 <i class="fas fa-trash-alt text-lg"></i>
                                 <span>刪除</span>
@@ -179,90 +182,48 @@
                             @touchmove="touchMove($event, idx)"
                             @touchend="touchEnd($event, idx)"
                         >
-                            
-                            <!-- 拖曳把手 -->
-                            <div class="drag-handle absolute right-3 top-3 text-slate-300 p-2 hover:text-slate-500 z-20 cursor-move">
-                                <i class="fas fa-bars"></i>
-                            </div>
+                            <div class="drag-handle absolute right-3 top-3 text-slate-300 p-2 hover:text-slate-500 z-20 cursor-move"><i class="fas fa-bars"></i></div>
 
-                            <!-- 編輯模式 -->
+                            <!-- 編輯/顯示模式 共用邏輯 -->
                             <div v-if="event.isEditing" class="p-4 space-y-3">
                                 <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wide">
-                                    <span :class="event.type==='flight'?'text-blue-500':'text-primary'">{{ event.type === 'flight' ? 'Flight Details' : 'Event Details' }}</span>
-                                    <button @click="removeEvent(idx)" class="text-slate-300 hover:text-red-400 px-2 py-1"><i class="fas fa-trash"></i></button>
+                                    <span :class="event.type==='flight'?'text-blue-500':'text-primary'">Editing</span>
+                                    <button @click="removeItem(idx)" class="text-slate-300 hover:text-red-400 px-2 py-1"><i class="fas fa-trash"></i></button>
                                 </div>
-
-                                <!-- 航班編輯欄位 -->
                                 <div v-if="event.type === 'flight'" class="space-y-3">
-                                    <input v-model="event.title" placeholder="航班代號 (例: CX450)" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none focus:ring-1 focus:ring-blue-400">
+                                    <input v-model="event.title" placeholder="航班代號" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none">
                                     <div class="flex items-center gap-2">
-                                        <div class="flex-1 space-y-1">
-                                            <label class="text-[10px] text-slate-400 font-bold uppercase">起飛</label>
-                                            <input v-model="event.depCode" @input="event.depCode = $event.target.value.toUpperCase()" placeholder="TPE" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
-                                            <input v-model="event.depTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
-                                        </div>
+                                        <div class="flex-1"><label class="text-[10px] text-slate-400 font-bold">起飛</label><input v-model="event.depCode" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none"><input v-model="event.depTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none"></div>
                                         <i class="fas fa-plane text-blue-300"></i>
-                                        <div class="flex-1 space-y-1">
-                                            <label class="text-[10px] text-slate-400 font-bold uppercase">降落</label>
-                                            <input v-model="event.arrCode" @input="event.arrCode = $event.target.value.toUpperCase()" placeholder="HKG" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none">
-                                            <input v-model="event.arrTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none">
-                                        </div>
+                                        <div class="flex-1"><label class="text-[10px] text-slate-400 font-bold">降落</label><input v-model="event.arrCode" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold uppercase text-center outline-none"><input v-model="event.arrTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none"></div>
                                     </div>
                                 </div>
-
-                                <!-- 一般行程編輯欄位 -->
                                 <div v-else class="space-y-3">
-                                    <input v-model="event.time" type="time" class="w-full bg-slate-50 p-3 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20">
-                                    <input v-model="event.title" placeholder="地點名稱" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none focus:ring-2 focus:ring-primary/20">
-                                    <input v-model="event.note" placeholder="備註" class="w-full bg-slate-50 p-3 rounded-xl text-sm text-slate-500 outline-none focus:ring-2 focus:ring-primary/20">
+                                    <input v-model="event.time" type="time" class="w-full bg-slate-50 p-3 rounded-xl text-sm font-medium outline-none">
+                                    <input v-model="event.title" placeholder="地點名稱" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none">
+                                    <input v-model="event.note" placeholder="備註" class="w-full bg-slate-50 p-3 rounded-xl text-sm text-slate-500 outline-none">
                                 </div>
-
-                                <button @click="event.isEditing = false; autoAdjustTimes(); updateData()" :class="['w-full text-white py-3 rounded-xl font-bold text-sm shadow-md', event.type==='flight'?'bg-blue-500 shadow-blue-500/20':'bg-primary shadow-primary/20']">完成</button>
+                                <button @click="event.isEditing = false; autoAdjustTimes(); updateData()" :class="['w-full text-white py-3 rounded-xl font-bold text-sm shadow-md', event.type==='flight'?'bg-blue-500':'bg-primary']">完成</button>
                             </div>
 
-                            <!-- 顯示模式 -->
                             <div v-else @click="event.isEditing = true" class="cursor-pointer">
-                                
-                                <!-- 航班顯示 -->
                                 <div v-if="event.type === 'flight'" class="flex flex-col">
                                     <div class="bg-blue-500 p-3 flex justify-between items-center text-white">
-                                        <div class="flex items-center gap-2">
-                                            <i class="fas fa-plane-departure"></i>
-                                            <div class="flex items-center gap-2">
-                                                <span class="font-bold tracking-wider">{{ event.title || 'FLIGHT' }}</span>
-                                                <span v-if="event.depCode && event.arrCode" class="bg-blue-600/50 px-2 py-0.5 rounded text-xs font-mono">
-                                                    {{ event.depCode }} <i class="fas fa-arrow-right text-[10px] mx-1"></i> {{ event.arrCode }}
-                                                </span>
-                                            </div>
-                                        </div>
+                                        <div class="flex items-center gap-2"><i class="fas fa-plane-departure"></i><span class="font-bold tracking-wider">{{ event.title || 'FLIGHT' }}</span><span v-if="event.depCode" class="bg-blue-600/50 px-2 py-0.5 rounded text-xs font-mono">{{ event.depCode }} <i class="fas fa-arrow-right text-[10px] mx-1"></i> {{ event.arrCode }}</span></div>
                                     </div>
                                     <div class="p-4 flex justify-between items-center relative">
                                         <div class="absolute top-1/2 left-4 right-4 h-0.5 border-t-2 border-dashed border-slate-200 -z-1"></div>
-                                        <div class="text-center bg-white px-2 z-0">
-                                            <div class="text-2xl font-black text-slate-700 uppercase">{{ event.depCode || 'DEP' }}</div>
-                                            <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.depTime || '--:--' }}</div>
-                                        </div>
+                                        <div class="text-center bg-white px-2 z-0"><div class="text-2xl font-black text-slate-700 uppercase">{{ event.depCode }}</div><div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.depTime }}</div></div>
                                         <div class="text-blue-400 z-0 bg-white px-1"><i class="fas fa-plane"></i></div>
-                                        <div class="text-center bg-white px-2 z-0">
-                                            <div class="text-2xl font-black text-slate-700 uppercase">{{ event.arrCode || 'ARR' }}</div>
-                                            <div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.arrTime || '--:--' }}</div>
-                                        </div>
+                                        <div class="text-center bg-white px-2 z-0"><div class="text-2xl font-black text-slate-700 uppercase">{{ event.arrCode }}</div><div class="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1">{{ event.arrTime }}</div></div>
                                     </div>
                                 </div>
-
-                                <!-- 一般行程顯示 -->
                                 <div v-else>
                                     <h3 class="text-lg font-bold text-dark mb-1 leading-snug pr-6">{{ event.title }}</h3>
-                                    <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md mb-3 border border-slate-100">
-                                        <i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}
-                                    </p>
+                                    <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md mb-3 border border-slate-100"><i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}</p>
                                     <p v-else class="mb-3"></p>
-                                    <!-- 移除導航按鈕下方空間 -->
                                     <div class="flex gap-2">
-                                        <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop 
-                                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition">
-                                            <i class="fas fa-location-arrow"></i> 導航
-                                        </a>
+                                        <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition"><i class="fas fa-location-arrow"></i> 導航</a>
                                     </div>
                                 </div>
                             </div>
@@ -271,18 +232,72 @@
                 </div>
             </div>
             
-            <!-- 底部新增按鈕群 -->
             <div v-if="currentDay?.events.length > 0" class="flex gap-3 mt-4">
-                <button @click="addEvent" class="flex-1 py-4 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-sm hover:bg-primary/5 transition-all">
-                    <i class="fas fa-plus mr-1"></i> 行程
-                </button>
-                <button @click="addFlight" class="flex-1 py-4 rounded-2xl border-2 border-dashed border-blue-300 text-blue-500 font-bold text-sm hover:bg-blue-50 transition-all">
-                    <i class="fas fa-plane mr-1"></i> 航班
-                </button>
+                <button @click="addEvent" class="flex-1 py-4 rounded-2xl border-2 border-dashed border-primary/30 text-primary font-bold text-sm hover:bg-primary/5 transition-all"><i class="fas fa-plus mr-1"></i> 行程</button>
+                <button @click="addFlight" class="flex-1 py-4 rounded-2xl border-2 border-dashed border-blue-300 text-blue-500 font-bold text-sm hover:bg-blue-50 transition-all"><i class="fas fa-plane mr-1"></i> 航班</button>
             </div>
         </div>
 
-        <!-- Tab 2: 分帳錢包 -->
+        <!-- Tab 2 & 3: 美食 (Food) 與 伴手禮 (Shop) -->
+        <div v-if="currentTab === 'food' || currentTab === 'souvenir'" class="px-5 pt-6 pb-28 space-y-4">
+            <!-- 標題區 -->
+            <div class="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 mb-4 flex items-center gap-4">
+                <div :class="['w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-md', currentTab==='food' ? 'bg-orange-100 text-food' : 'bg-pink-100 text-shop']">
+                    <i :class="['fas', currentTab==='food' ? 'fa-utensils' : 'fa-gift']"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-dark">{{ currentTabName }}清單</h2>
+                    <p class="text-xs text-slate-400">滑動可刪除 • 拖曳可排序</p>
+                </div>
+            </div>
+
+            <!-- 共用列表容器 -->
+            <div ref="eventListRef" class="space-y-4 pb-2 min-h-[50px]">
+                <div v-for="(item, idx) in currentList" :key="item.id || idx" 
+                     class="relative transition-all duration-300">
+                    
+                    <div class="relative overflow-hidden rounded-3xl shadow-soft">
+                        <!-- 刪除背景 -->
+                        <div class="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 text-white z-0" @click="removeItem(idx)">
+                            <div class="flex flex-col items-center gap-1 font-bold text-xs"><i class="fas fa-trash-alt text-lg"></i><span>刪除</span></div>
+                        </div>
+
+                        <!-- 本體 -->
+                        <div :class="['relative z-10 transition-transform duration-200 ease-out border bg-white p-5 border-slate-100']"
+                            :style="{ transform: `translateX(${item.swipeOffset || 0}px)` }"
+                            @touchstart="touchStart($event, idx)"
+                            @touchmove="touchMove($event, idx)"
+                            @touchend="touchEnd($event, idx)"
+                        >
+                            <div class="drag-handle absolute right-3 top-3 text-slate-300 p-2 hover:text-slate-500 z-20 cursor-move"><i class="fas fa-bars"></i></div>
+
+                            <div v-if="item.isEditing" class="space-y-3">
+                                <div class="flex justify-between text-xs font-bold uppercase tracking-wide">
+                                    <span :class="currentTab==='food'?'text-food':'text-shop'">Editing</span>
+                                    <button @click="removeItem(idx)" class="text-slate-300 hover:text-red-400"><i class="fas fa-trash"></i></button>
+                                </div>
+                                <input v-model="item.title" placeholder="名稱 (例: 蛋塔)" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none">
+                                <input v-model="item.note" placeholder="備註 (例: 要買3盒)" class="w-full bg-slate-50 p-3 rounded-xl text-sm text-slate-500 outline-none">
+                                <button @click="item.isEditing = false; updateData()" :class="['w-full text-white py-3 rounded-xl font-bold text-sm shadow-md', currentTab==='food'?'bg-food':'bg-shop']">完成</button>
+                            </div>
+
+                            <div v-else @click="item.isEditing = true" class="cursor-pointer">
+                                <h3 class="text-lg font-bold text-dark mb-1 leading-snug pr-6">{{ item.title }}</h3>
+                                <p v-if="item.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md mb-3 border border-slate-100"><i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ item.note }}</p>
+                                <p v-else class="mb-3"></p>
+                                <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(item.title + ' 香港')" target="_blank" @click.stop class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition"><i class="fas fa-location-arrow"></i> 導航</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button @click="addListItem" :class="['w-full py-4 rounded-2xl border-2 border-dashed font-bold text-sm transition-all flex items-center justify-center gap-2', currentTab==='food' ? 'border-food/30 text-food hover:bg-food/5' : 'border-shop/30 text-shop hover:bg-shop/5']">
+                <i class="fas fa-plus"></i> 新增{{ currentTabName }}
+            </button>
+        </div>
+
+        <!-- Tab 4: Wallet -->
         <div v-else-if="currentTab === 'wallet'" class="px-5 pt-6 pb-28 space-y-6">
             <!-- 匯率轉換器 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
@@ -408,7 +423,6 @@
                             <button @click="removeExpense(idx)" class="text-[10px] text-slate-300 hover:text-red-400 mt-1">刪除</button>
                         </div>
                     </div>
-                    <!-- 顯示分帳詳情 -->
                     <div class="bg-slate-50 rounded-lg p-2 text-[10px] text-slate-500">
                         <div v-if="exp.splitType === 'even'">
                             <span class="font-bold">均分成員:</span> {{ exp.involvedMembers.join(', ') }} 
@@ -430,13 +444,21 @@
     <!-- 底部導航 -->
     <nav class="fixed bottom-0 w-full max-w-[430px] z-50 px-6 pb-6 pt-2 pointer-events-none">
         <div class="bg-white/90 backdrop-blur-xl border border-white/40 shadow-float rounded-3xl flex justify-around items-center py-3 px-2 pointer-events-auto">
-            <button @click="switchTab('itinerary')" :class="['relative flex flex-col items-center gap-1 w-16 transition-all duration-300', currentTab === 'itinerary' ? 'text-primary -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
+            <button @click="switchTab('itinerary')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'itinerary' ? 'text-primary -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
                 <div :class="['text-xl transition-all', currentTab === 'itinerary' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-calendar-check"></i></div>
                 <span class="text-[10px] font-bold">Plan</span>
             </button>
-            <button @click="switchTab('wallet')" :class="['relative flex flex-col items-center gap-1 w-16 transition-all duration-300', currentTab === 'wallet' ? 'text-indigo-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
+            <button @click="switchTab('wallet')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'wallet' ? 'text-indigo-500 -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
                 <div :class="['text-xl transition-all', currentTab === 'wallet' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-wallet"></i></div>
                 <span class="text-[10px] font-bold">Wallet</span>
+            </button>
+            <button @click="switchTab('food')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'food' ? 'text-food -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
+                 <div :class="['text-xl transition-all', currentTab === 'food' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-utensils"></i></div>
+                 <span class="text-[10px] font-bold">Food</span>
+            </button>
+            <button @click="switchTab('souvenir')" :class="['relative flex flex-col items-center gap-1 w-14 transition-all duration-300', currentTab === 'souvenir' ? 'text-shop -translate-y-1' : 'text-slate-300 hover:text-slate-400']">
+                <div :class="['text-xl transition-all', currentTab === 'souvenir' ? 'scale-110 drop-shadow-md' : '']"><i class="fas fa-gift"></i></div>
+                <span class="text-[10px] font-bold">Shop</span>
             </button>
         </div>
     </nav>
@@ -465,7 +487,6 @@ const firebaseConfig = {
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
     
-    // 如果網址沒有 ID，自動產生 ID
     if (!tripId) {
         tripId = 'trip_' + Math.random().toString(36).substr(2, 6);
         try {
@@ -474,7 +495,6 @@ const firebaseConfig = {
         } catch (e) { console.log("預覽環境略過網址修改"); }
     }
 
-    // 初始化 Firebase (如果有 Key)
     if (firebaseConfig.apiKey) {
         const app = initializeApp(firebaseConfig);
         db = getDatabase(app);
@@ -491,9 +511,12 @@ const firebaseConfig = {
             const syncStatus = ref('idle');
             
             const activeDay = ref(0);
-            const tripDays = ref([
-                { events: [] }, { events: [] }, { events: [] }, { events: [] }
-            ]);
+            const tripDays = ref([{ events: [] }, { events: [] }, { events: [] }, { events: [] }]);
+            
+            // 新增美食與伴手禮清單
+            const foodList = ref([]);
+            const souvenirList = ref([]);
+
             const exchangeRate = ref(4.1);
             const lastRateUpdate = ref(''); 
             const isFetchingRate = ref(false); 
@@ -501,31 +524,29 @@ const firebaseConfig = {
             const people = ref(['我', '朋友']);
             const expenses = ref([]);
             
-            // 新增分帳用的資料結構
             const newExpense = ref({ 
-                item: '', 
-                amount: '', 
-                payer: '我',
-                splitType: 'even', 
-                involvedMembers: [], 
-                customAmounts: {} 
+                item: '', amount: '', payer: '我', splitType: 'even', involvedMembers: [], customAmounts: {} 
             });
             const newPersonName = ref('');
 
-            // Sortable 相關
+            // Sortable & Swipe
             const eventListRef = ref(null);
             let sortableInstance = null;
-
-            // Swipe 相關狀態
             const touchStartX = ref(0);
             const activeSwipeIndex = ref(-1); 
             const initialSwipeOffset = ref(0);
 
             const saveModeText = computed(() => db ? '雲端' : '本機');
             
-            // 安全讀取 currentDay，避免在切換時報錯
-            const currentDay = computed(() => {
-                return tripDays.value[activeDay.value] || { events: [] };
+            // 安全讀取 currentDay
+            const currentDay = computed(() => tripDays.value[activeDay.value] || { events: [] });
+
+            // 取得當前顯示的列表 (用於 Swipe / Delete / Add)
+            const currentList = computed(() => {
+                if (currentTab.value === 'itinerary') return tripDays.value[activeDay.value].events;
+                if (currentTab.value === 'food') return foodList.value;
+                if (currentTab.value === 'souvenir') return souvenirList.value;
+                return [];
             });
 
             // 匯率抓取功能
@@ -540,133 +561,107 @@ const firebaseConfig = {
                         lastRateUpdate.value = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
                         updateData();
                         alert(`匯率已更新！目前 1 HKD ≈ ${exchangeRate.value} TWD`);
-                    } else {
-                        alert("無法取得匯率資料，請稍後再試。");
-                    }
-                } catch(e) {
-                    console.error(e);
-                    alert("匯率更新失敗，請檢查網路連線。");
-                } finally {
-                    isFetchingRate.value = false;
-                }
+                    } else { alert("無法取得匯率資料"); }
+                } catch(e) { console.error(e); alert("匯率更新失敗"); } finally { isFetchingRate.value = false; }
             };
 
-            // 時間計算輔助函數
             const addMinutes = (timeStr, minsToAdd) => {
                 if (!timeStr) return '';
                 const [h, m] = timeStr.split(':').map(Number);
-                const date = new Date();
-                date.setHours(h);
-                date.setMinutes(m + minsToAdd);
+                const date = new Date(); date.setHours(h); date.setMinutes(m + minsToAdd);
                 return `${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
             };
 
-            // 自動調整時間函數
             const autoAdjustTimes = () => {
+                // 時間調整只在行程頁面運作
+                if (currentTab.value !== 'itinerary') return;
+
                 const list = currentDay.value.events;
                 if (list.length < 2) return;
 
                 for (let i = 1; i < list.length; i++) {
                     const prev = list[i-1];
                     const curr = list[i];
-                    
-                    let prevEndTime;
-                    if (prev.type === 'flight') {
-                        prevEndTime = prev.arrTime;
-                    } else {
-                        prevEndTime = prev.time;
-                    }
-
+                    let prevEndTime = (prev.type === 'flight') ? prev.arrTime : prev.time;
                     if (!prevEndTime) continue;
-
                     const minStartTime = addMinutes(prevEndTime, 30);
                     let currStartTime = (curr.type === 'flight') ? curr.depTime : curr.time;
-
-                    if (currStartTime < minStartTime) {
-                        if (curr.type !== 'flight') {
-                            curr.time = minStartTime;
-                        }
-                    }
+                    if (currStartTime < minStartTime && curr.type !== 'flight') curr.time = minStartTime;
                 }
             };
 
-            // 初始化 Sortable
             const initSortable = () => {
                 if (sortableInstance) sortableInstance.destroy();
                 if (!eventListRef.value) return;
                 
                 sortableInstance = new Sortable(eventListRef.value, {
-                    animation: 150,
-                    handle: '.drag-handle',
-                    ghostClass: 'sortable-ghost',
+                    animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
                     onEnd: (evt) => {
                         if (evt.oldIndex === evt.newIndex) return;
-                        const list = tripDays.value[activeDay.value].events;
+                        
+                        // 根據當前 Tab 決定操作哪個陣列
+                        let list;
+                        if (currentTab.value === 'itinerary') list = tripDays.value[activeDay.value].events;
+                        else if (currentTab.value === 'food') list = foodList.value;
+                        else if (currentTab.value === 'souvenir') list = souvenirList.value;
+                        else return;
+
                         const item = list.splice(evt.oldIndex, 1)[0];
                         list.splice(evt.newIndex, 0, item);
-                        autoAdjustTimes();
+                        
+                        if (currentTab.value === 'itinerary') autoAdjustTimes();
                         updateData();
                     }
                 });
             };
 
-            watch(activeDay, () => { 
+            // 監聽 Tab 和 Day 切換來重置 Sortable
+            watch([activeDay, currentTab], () => { 
                 activeSwipeIndex.value = -1;
                 nextTick(initSortable); 
             });
 
-            // 初始化分帳預設值
             watch(people, (newPeople) => {
-                if(newExpense.value.involvedMembers.length === 0) {
-                    newExpense.value.involvedMembers = [...newPeople];
-                }
-                newPeople.forEach(p => {
-                    if(!(p in newExpense.value.customAmounts)) {
-                        newExpense.value.customAmounts[p] = 0;
-                    }
-                });
+                if(newExpense.value.involvedMembers.length === 0) newExpense.value.involvedMembers = [...newPeople];
+                newPeople.forEach(p => { if(!(p in newExpense.value.customAmounts)) newExpense.value.customAmounts[p] = 0; });
             }, { immediate: true });
 
             const customTotal = computed(() => {
                 let sum = 0;
-                for(let p in newExpense.value.customAmounts) {
-                    sum += (newExpense.value.customAmounts[p] || 0);
-                }
+                for(let p in newExpense.value.customAmounts) sum += (newExpense.value.customAmounts[p] || 0);
                 return sum;
             });
 
-            // Swipe Handlers
+            // 通用 Swipe Handlers (適用於所有列表)
             const touchStart = (e, idx) => {
                 touchStartX.value = e.touches[0].clientX;
-                const event = tripDays.value[activeDay.value].events[idx];
-                initialSwipeOffset.value = event.swipeOffset || 0;
-
+                const list = currentList.value;
+                if (!list || !list[idx]) return;
+                initialSwipeOffset.value = list[idx].swipeOffset || 0;
                 if (activeSwipeIndex.value !== -1 && activeSwipeIndex.value !== idx) {
-                    const list = tripDays.value[activeDay.value].events;
-                    if (list[activeSwipeIndex.value]) list[activeSwipeIndex.value].swipeOffset = 0;
-                    activeSwipeIndex.value = -1;
+                   if (list[activeSwipeIndex.value]) list[activeSwipeIndex.value].swipeOffset = 0;
+                   activeSwipeIndex.value = -1;
                 }
             };
 
             const touchMove = (e, idx) => {
-                const currentX = e.touches[0].clientX;
-                const diff = currentX - touchStartX.value;
-                const event = tripDays.value[activeDay.value].events[idx];
-                
+                const diff = e.touches[0].clientX - touchStartX.value;
+                const list = currentList.value;
+                if (!list || !list[idx]) return;
                 let targetOffset = initialSwipeOffset.value + diff;
                 if (targetOffset > 0) targetOffset = 0;
                 if (targetOffset < -100) targetOffset = -100;
-
-                event.swipeOffset = targetOffset;
+                list[idx].swipeOffset = targetOffset;
             };
 
             const touchEnd = (e, idx) => {
-                const event = tripDays.value[activeDay.value].events[idx];
-                if (event.swipeOffset < -40) {
-                    event.swipeOffset = -80; 
+                const list = currentList.value;
+                if (!list || !list[idx]) return;
+                if (list[idx].swipeOffset < -40) {
+                    list[idx].swipeOffset = -80; 
                     activeSwipeIndex.value = idx;
                 } else {
-                    event.swipeOffset = 0;
+                    list[idx].swipeOffset = 0;
                     if (activeSwipeIndex.value === idx) activeSwipeIndex.value = -1;
                 }
             };
@@ -683,16 +678,13 @@ const firebaseConfig = {
                     });
                 } else {
                     const localData = localStorage.getItem('hk_trip_' + tripId);
-                    if (localData) {
-                        loadDataIntoVue(JSON.parse(localData));
-                    }
+                    if (localData) loadDataIntoVue(JSON.parse(localData));
                     nextTick(initSortable);
                 }
                 fetchWeather();
             });
 
             const loadDataIntoVue = (data) => {
-                // Ensure exactly 4 days structure if loading weird data
                 const loadedDays = data.tripDays || [];
                 while(loadedDays.length < 4) loadedDays.push({ events: [] });
                 tripDays.value = loadedDays.slice(0, 4);
@@ -700,6 +692,11 @@ const firebaseConfig = {
                 expenses.value = data.expenses || [];
                 exchangeRate.value = data.exchangeRate || 4.1;
                 people.value = data.people || people.value;
+                
+                // 載入新列表
+                foodList.value = data.foodList || [];
+                souvenirList.value = data.souvenirList || [];
+
                 syncStatus.value = 'done';
                 nextTick(initSortable);
             };
@@ -707,30 +704,29 @@ const firebaseConfig = {
             const updateData = () => {
                 if (isRemoteUpdate) return;
                 syncStatus.value = 'syncing';
-                
                 const dataToSave = {
                     tripDays: JSON.parse(JSON.stringify(tripDays.value)),
                     expenses: JSON.parse(JSON.stringify(expenses.value)),
                     exchangeRate: exchangeRate.value,
                     people: people.value,
+                    // 儲存新列表
+                    foodList: JSON.parse(JSON.stringify(foodList.value)),
+                    souvenirList: JSON.parse(JSON.stringify(souvenirList.value)),
                     lastUpdated: new Date().toISOString()
                 };
-
-                if (db && tripRef) {
-                    set(tripRef, dataToSave).then(() => setTimeout(() => syncStatus.value = 'done', 500));
-                } else {
-                    localStorage.setItem('hk_trip_' + tripId, JSON.stringify(dataToSave));
-                    setTimeout(() => syncStatus.value = 'done', 300);
-                }
+                if (db && tripRef) set(tripRef, dataToSave).then(() => setTimeout(() => syncStatus.value = 'done', 500));
+                else { localStorage.setItem('hk_trip_' + tripId, JSON.stringify(dataToSave)); setTimeout(() => syncStatus.value = 'done', 300); }
             };
 
-            let timer;
-            watch([tripDays, expenses, exchangeRate, people], () => { 
+            watch([tripDays, expenses, exchangeRate, people, foodList, souvenirList], () => { 
                 if(isRemoteUpdate) return;
-                clearTimeout(timer);
+                clearTimeout(null); // Simple debounce placeholder
                 syncStatus.value = 'syncing';
-                timer = setTimeout(updateData, 1000);
+                setTimeout(updateData, 1000);
             }, { deep: true });
+
+            const addDay = async () => { tripDays.value.push({ events: [] }); await nextTick(); activeDay.value = tripDays.value.length - 1; updateData(); };
+            const removeDay = (index) => { if(tripDays.value.length <= 1) return; if(confirm('Delete?')) tripDays.value.splice(index, 1); updateData(); };
 
             const addEvent = () => { 
                 const list = currentDay.value.events;
@@ -740,15 +736,7 @@ const firebaseConfig = {
                     const refTime = (last.type === 'flight') ? last.arrTime : last.time;
                     if (refTime) newTime = addMinutes(refTime, 30);
                 }
-
-                tripDays.value[activeDay.value].events.push({ 
-                    type: 'event', 
-                    time: newTime, 
-                    title: '', 
-                    isEditing: true, 
-                    id: Date.now(),
-                    swipeOffset: 0
-                }); 
+                tripDays.value[activeDay.value].events.push({ type: 'event', time: newTime, title: '', isEditing: true, id: Date.now(), swipeOffset: 0 }); 
             };
             
             const addFlight = () => {
@@ -759,37 +747,43 @@ const firebaseConfig = {
                     const refTime = (last.type === 'flight') ? last.arrTime : last.time;
                     if (refTime) newDep = addMinutes(refTime, 60); 
                 }
-
-                tripDays.value[activeDay.value].events.push({ 
-                    type: 'flight', 
-                    depCode: '', depTime: newDep,
-                    arrCode: '', arrTime: addMinutes(newDep, 120), 
-                    title: '', isEditing: true,
-                    id: Date.now(),
-                    swipeOffset: 0
-                });
+                tripDays.value[activeDay.value].events.push({ type: 'flight', depCode: '', depTime: newDep, arrCode: '', arrTime: addMinutes(newDep, 120), title: '', isEditing: true, id: Date.now(), swipeOffset: 0 });
                 updateData();
             };
 
-            const removeEvent = (i) => { 
-                tripDays.value[activeDay.value].events.splice(i, 1); 
-                activeSwipeIndex.value = -1; 
-                autoAdjustTimes(); 
-                updateData(); 
+            // 通用新增項目 (美食/伴手禮)
+            const addListItem = () => {
+                const newItem = { title: '', note: '', isEditing: true, id: Date.now(), swipeOffset: 0 };
+                if (currentTab.value === 'food') foodList.value.push(newItem);
+                else if (currentTab.value === 'souvenir') souvenirList.value.push(newItem);
+                updateData();
             };
+
+            // 通用移除項目
+            const removeItem = (idx) => {
+                if (currentTab.value === 'itinerary') {
+                    tripDays.value[activeDay.value].events.splice(idx, 1);
+                    autoAdjustTimes();
+                } else if (currentTab.value === 'food') {
+                    foodList.value.splice(idx, 1);
+                } else if (currentTab.value === 'souvenir') {
+                    souvenirList.value.splice(idx, 1);
+                }
+                activeSwipeIndex.value = -1;
+                updateData();
+            };
+
+            // 移除特定功能的 removeEvent wrapper，直接使用 removeItem
+            const removeEvent = removeItem;
             
             const addExpense = () => {
                 const { item, amount, payer, splitType, involvedMembers, customAmounts } = newExpense.value;
                 if(!item || !amount) return alert("請輸入項目和金額");
-                if(splitType === 'custom') {
-                    if(customTotal.value !== amount) return alert(`分配金額總和 ($${customTotal.value}) 不等於總金額 ($${amount})`);
-                } else {
-                    if(involvedMembers.length === 0) return alert("請至少選擇一位分帳成員");
-                }
-                const savedCustomAmounts = JSON.parse(JSON.stringify(customAmounts));
-                expenses.value.unshift({ item, amount, payer, splitType, involvedMembers: [...involvedMembers], customAmounts: savedCustomAmounts });
-                newExpense.value.item = '';
-                newExpense.value.amount = '';
+                if(splitType === 'custom' && customTotal.value !== amount) return alert("金額不符");
+                if(splitType === 'even' && involvedMembers.length === 0) return alert("請選擇成員");
+                
+                expenses.value.unshift({ item, amount, payer, splitType, involvedMembers: [...involvedMembers], customAmounts: JSON.parse(JSON.stringify(customAmounts)) });
+                newExpense.value.item = ''; newExpense.value.amount = '';
                 people.value.forEach(p => newExpense.value.customAmounts[p] = 0);
                 updateData();
             };
@@ -798,53 +792,31 @@ const firebaseConfig = {
 
             const addPerson = () => {
                 const name = newPersonName.value.trim();
-                if (name && !people.value.includes(name)) {
-                    people.value.push(name);
-                    newPersonName.value = '';
-                    updateData();
-                }
+                if (name && !people.value.includes(name)) { people.value.push(name); newPersonName.value = ''; updateData(); }
             };
-            
-            const removePerson = (index) => {
-                if(confirm(`確定要移除成員「${people.value[index]}」嗎？`)) {
-                    people.value.splice(index, 1);
-                    updateData();
-                }
-            };
+            const removePerson = (index) => { if(confirm('Delete?')) { people.value.splice(index, 1); updateData(); } };
 
             const totalExpense = computed(() => expenses.value.reduce((sum, item) => sum + (item.amount || 0), 0));
-            
             const balances = computed(() => {
                 let bal = {};
                 people.value.forEach(p => bal[p] = { paid: 0, shouldPay: 0, balance: 0 });
                 expenses.value.forEach(exp => {
-                    const payer = exp.payer;
-                    const amount = exp.amount;
+                    const payer = exp.payer; const amount = exp.amount;
                     if(bal[payer]) bal[payer].paid += amount;
                     if (exp.splitType === 'custom') {
-                        for (let person in exp.customAmounts) {
-                            if(bal[person]) bal[person].shouldPay += (exp.customAmounts[person] || 0);
-                        }
+                        for (let person in exp.customAmounts) if(bal[person]) bal[person].shouldPay += (exp.customAmounts[person] || 0);
                     } else {
                         const involved = (exp.involvedMembers && exp.involvedMembers.length > 0) ? exp.involvedMembers : people.value;
                         const splitAmount = amount / involved.length;
-                        involved.forEach(person => {
-                            if(bal[person]) bal[person].shouldPay += splitAmount;
-                        });
+                        involved.forEach(person => { if(bal[person]) bal[person].shouldPay += splitAmount; });
                     }
                 });
-                for(let p in bal) {
-                    bal[p].balance = Math.round(bal[p].paid - bal[p].shouldPay);
-                }
+                for(let p in bal) bal[p].balance = Math.round(bal[p].paid - bal[p].shouldPay);
                 return bal;
             });
-
             const formatNumber = (num) => new Intl.NumberFormat().format(Math.round(num));
 
-            const copyLink = () => {
-                navigator.clipboard.writeText(window.location.href);
-                alert("網址已複製！傳給朋友即可同步。\nID: " + tripId);
-            };
+            const copyLink = () => { navigator.clipboard.writeText(window.location.href); alert("Copied ID: " + tripId); };
 
             const fetchWeather = async () => {
                 try {
@@ -860,17 +832,19 @@ const firebaseConfig = {
 
             const switchTab = async (tab) => {
                 currentTab.value = tab;
-                if (tab === 'itinerary') nextTick(initSortable);
+                if (tab === 'itinerary' || tab === 'food' || tab === 'souvenir') nextTick(initSortable);
             };
 
             return {
-                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDay,
+                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDay, currentList, foodList, souvenirList,
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
+                    if (currentTab.value === 'food') return 'Food';
+                    if (currentTab.value === 'souvenir') return 'Shop';
                 }),
                 addEvent, addFlight, removeEvent, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate,
-                newPersonName, addPerson, removePerson, autoAdjustTimes,
+                newPersonName, addPerson, removePerson, autoAdjustTimes, addListItem, removeItem,
                 eventListRef, touchStart, touchMove, touchEnd 
             };
         }
