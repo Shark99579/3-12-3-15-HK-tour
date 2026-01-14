@@ -178,6 +178,9 @@
                                         <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md border border-slate-100"><i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}</p>
                                         <span class="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100"><i class="fas fa-hourglass-half mr-1"></i>{{ event.duration || 60 }} min</span>
                                     </div>
+                                    <div class="flex gap-2">
+                                        <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition"><i class="fas fa-location-arrow"></i> 導航</a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -228,7 +231,6 @@
 
         <!-- ==================== Tab 4: Wallet ==================== -->
         <div v-else-if="currentTab === 'wallet'" class="px-5 pt-6 pb-28 space-y-6">
-            <!-- 匯率轉換器 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold">$$</div>
@@ -248,7 +250,6 @@
                 <div class="flex gap-2"><input v-model="newPersonName" @keyup.enter="addPerson" placeholder="新增名字" class="flex-1 bg-slate-50 px-3 py-2 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-primary"><button @click="addPerson" class="bg-dark text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md"><i class="fas fa-plus"></i></button></div>
             </div>
 
-            <!-- 公款投入區塊 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-yellow-200 bg-yellow-50/50">
                 <div class="flex justify-between items-center mb-3">
                     <span class="text-xs font-bold text-yellow-600 flex items-center gap-1"><i class="fas fa-piggy-bank"></i> 公款管理 (HKD)</span>
@@ -381,6 +382,7 @@ const firebaseConfig = {
   appId: "1:764791659242:web:f478ee64f1013067705593",
   measurementId: "G-3RYVGRSDX7"
 };
+
     let db = null, tripRef = null, isRemoteUpdate = false;
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
@@ -404,7 +406,6 @@ const firebaseConfig = {
             const syncStatus = ref('idle');
             const activeDay = ref(0);
             
-            // 強制初始化 4 天
             const tripDays = ref([{ events: [] }, { events: [] }, { events: [] }, { events: [] }]);
             const foodList = ref([]);
             const souvenirList = ref([]);
@@ -644,6 +645,9 @@ const firebaseConfig = {
             };
 
             const touchStart = (e, idx, listType) => {
+                // Prevent swipe if touching drag handle
+                if (e.target.closest('.drag-handle')) return; 
+
                 touchStartX.value = e.touches[0].clientX;
                 const list = currentList.value;
                 if (!list[idx]) return;
@@ -658,10 +662,13 @@ const firebaseConfig = {
                 const diff = e.touches[0].clientX - touchStartX.value;
                 const list = currentList.value;
                 if (!list[idx]) return;
+                
                 let targetOffset = initialSwipeOffset.value + diff;
                 if (targetOffset > 0) targetOffset = 0;
                 if (targetOffset < -100) targetOffset = -100;
-                list[idx].swipeOffset = targetOffset;
+
+                event.swipeOffset = targetOffset;
+                list[idx].swipeOffset = targetOffset; // Ensure reactive update
             };
 
             const touchEnd = (e, idx, listType) => {
@@ -691,7 +698,12 @@ const firebaseConfig = {
                 tripDays.value = loadedDays.slice(0, 4);
                 expenses.value = data.expenses || [];
                 exchangeRate.value = data.exchangeRate || 4.1;
-                people.value = data.people || people.value;
+                // If people data exists in cloud, use it. Otherwise fallback to default.
+                // But default is already set in setup(), so we overwrite if data.people exists.
+                // Since user requested specific defaults, we only overwrite if cloud has data, 
+                // but for new trip (no data.people), default applies.
+                if (data.people) people.value = data.people; 
+                
                 foodList.value = data.foodList || [];
                 souvenirList.value = data.souvenirList || [];
                 
