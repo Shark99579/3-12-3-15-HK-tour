@@ -42,8 +42,6 @@
         body { background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .sortable-ghost { opacity: 0.4; background: #f0f9ff; border: 2px dashed #2DD4BF; }
-        /* 增加拖曳時的層級，避免被遮擋 */
-        .sortable-fallback { opacity: 1 !important; background: white; border: 1px solid #2DD4BF; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); pointer-events: none; } 
         .drag-handle { cursor: move; touch-action: none; }
         @media (min-width: 640px) {
             body { display: flex; justify-content: center; min-height: 100vh; align-items: center; padding: 20px; background-image: linear-gradient(135deg, #e0f2fe 0%, #f0fdfa 100%); }
@@ -121,8 +119,7 @@
                 </div>
             </div>
 
-            <!-- 加入 min-h 以確保有空間可拖曳 -->
-            <div ref="eventListRef" class="space-y-4 pb-2 min-h-[50px]">
+            <div ref="eventListRef" class="space-y-4 pb-2 min-h-[10px]">
                 <div v-for="(event, idx) in currentDayEvents" :key="event.id" :class="['relative transition-all duration-300', event.type === 'flight' ? 'pl-2' : 'pl-14 last-item-check']">
                     <div v-if="event.type !== 'flight'" class="absolute left-0 top-0 w-12 flex flex-col items-center z-0 pointer-events-none">
                         <span class="text-xs font-bold text-slate-400 mb-1">{{ event.time }}</span>
@@ -203,7 +200,7 @@
                 <div :class="['w-12 h-12 rounded-full flex items-center justify-center text-2xl shadow-md', currentTab==='food' ? 'bg-orange-100 text-food' : 'bg-pink-100 text-shop']"><i :class="['fas', currentTab==='food' ? 'fa-utensils' : 'fa-gift']"></i></div>
                 <div><h2 class="text-lg font-bold text-dark">{{ currentTabName }}清單</h2><p class="text-xs text-slate-400">滑動可刪除 • 拖曳可排序</p></div>
             </div>
-            <div ref="eventListRef" class="space-y-4 pb-2 min-h-[50px]">
+            <div ref="eventListRef" class="space-y-4 pb-2 min-h-[10px]">
                 <div v-for="(item, idx) in currentList" :key="item.id" class="relative transition-all duration-300">
                     <div class="relative overflow-hidden rounded-3xl shadow-soft">
                         <div class="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 text-white z-0" @click="removeItem(idx, currentTab)">
@@ -253,10 +250,14 @@
                 <div class="flex gap-2"><input v-model="newPersonName" @keyup.enter="addPerson" placeholder="新增名字" class="flex-1 bg-slate-50 px-3 py-2 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-primary"><button @click="addPerson" class="bg-dark text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md"><i class="fas fa-plus"></i></button></div>
             </div>
 
+            <!-- 公款投入區塊 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-yellow-200 bg-yellow-50/50">
                 <div class="flex justify-between items-center mb-3">
                     <span class="text-xs font-bold text-yellow-600 flex items-center gap-1"><i class="fas fa-piggy-bank"></i> 公款管理 (HKD)</span>
-                    <button @click="showFundDetails = !showFundDetails" class="text-xs text-yellow-500 underline">{{ showFundDetails ? '隱藏' : '展開' }}</button>
+                    <div class="flex gap-2">
+                        <button @click="resetPublicFund" class="text-xs text-red-400 underline">歸零</button>
+                        <button @click="showFundDetails = !showFundDetails" class="text-xs text-yellow-500 underline">{{ showFundDetails ? '隱藏' : '展開' }}</button>
+                    </div>
                 </div>
                 <div v-if="showFundDetails" class="mb-4 space-y-3 border-b border-yellow-100 pb-3">
                     <div v-for="p in people" :key="p" class="flex flex-col gap-1 border-b border-yellow-100/50 pb-2 last:border-0 last:pb-0">
@@ -408,6 +409,7 @@ const firebaseConfig = {
             const syncStatus = ref('idle');
             const activeDay = ref(0);
             
+            // 強制初始化 4 天
             const tripDays = ref([{ events: [] }, { events: [] }, { events: [] }, { events: [] }]);
             const foodList = ref([]);
             const souvenirList = ref([]);
@@ -520,11 +522,7 @@ const firebaseConfig = {
                 if (sortableInstance) sortableInstance.destroy();
                 if (!eventListRef.value) return;
                 sortableInstance = new Sortable(eventListRef.value, {
-                    animation: 150, 
-                    handle: '.drag-handle', 
-                    ghostClass: 'sortable-ghost',
-                    forceFallback: true, // Fix for mobile drag issues
-                    scroll: true,
+                    animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
                     onEnd: (evt) => {
                         if (evt.oldIndex === evt.newIndex) return;
                         const list = currentList.value;
@@ -645,6 +643,15 @@ const firebaseConfig = {
                 if (amountToAdd && amountToAdd > 0) {
                     publicFundDeposits.value[personName] = (publicFundDeposits.value[personName] || 0) + amountToAdd;
                     tempFundInputs.value[personName] = ''; // Clear input
+                    updateData();
+                }
+            };
+            
+            const resetPublicFund = () => {
+                if (confirm('確定要將所有公款投入金額歸零嗎？此動作無法復原。')) {
+                    for (let p in publicFundDeposits.value) {
+                        publicFundDeposits.value[p] = 0;
+                    }
                     updateData();
                 }
             };
@@ -855,7 +862,7 @@ const firebaseConfig = {
                     if (currentTab.value === 'souvenir') return 'Shop';
                 }),
                 addEvent, addFlight, removeEvent: removeItem, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate, calculateSettlement, toggleCurrency, formatCurrency,
-                newPersonName, addPerson, removePerson, autoAdjustTimes, addListItem, removeItem, confirmAddFund,
+                newPersonName, addPerson, removePerson, autoAdjustTimes, addListItem, removeItem, confirmAddFund, resetPublicFund,
                 eventListRef, touchStart, touchMove, touchEnd 
             };
         }
