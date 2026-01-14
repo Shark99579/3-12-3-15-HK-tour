@@ -120,7 +120,7 @@
         <!-- ==================== Tab 1: 行程表 ==================== -->
         <div v-if="currentTab === 'itinerary'" class="px-5 pt-6 pb-28 space-y-4">
             
-            <!-- 空白狀態 -->
+            <!-- 空白狀態 (確保按鈕可以點擊) -->
             <div v-if="currentDayEvents.length === 0" class="text-center py-12">
                 <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300 text-2xl">
                     <i class="fas fa-map-marked-alt"></i>
@@ -149,7 +149,7 @@
                         <div class="bg-slate-100 text-[9px] text-slate-400 px-1 rounded mt-1">{{ event.duration || 60 }}m</div>
                     </div>
 
-                    <!-- 卡片容器 -->
+                    <!-- 卡片容器 (處理滑動) -->
                     <div class="relative overflow-hidden rounded-3xl shadow-soft group">
                         <!-- 刪除背景 -->
                         <div class="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 text-white z-0" @click="removeItem(idx, 'itinerary')">
@@ -239,6 +239,7 @@
                 </div>
             </div>
 
+            <!-- 共用列表容器 -->
             <div ref="eventListRef" class="space-y-4 pb-2 min-h-[10px]">
                 <div v-for="(item, idx) in currentList" :key="item.id" class="relative transition-all duration-300">
                     <div class="relative overflow-hidden rounded-3xl shadow-soft">
@@ -279,7 +280,6 @@
 
         <!-- ==================== Tab 4: Wallet ==================== -->
         <div v-else-if="currentTab === 'wallet'" class="px-5 pt-6 pb-28 space-y-6">
-            <!-- 匯率轉換器 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold">$$</div>
@@ -291,7 +291,6 @@
                 </div>
             </div>
 
-            <!-- 成員管理 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                 <div class="flex justify-between items-center mb-3"><span class="text-xs font-bold text-slate-500 flex items-center gap-1"><i class="fas fa-users"></i> 分帳成員</span></div>
                 <div class="flex flex-wrap gap-2 mb-3">
@@ -300,17 +299,32 @@
                 <div class="flex gap-2"><input v-model="newPersonName" @keyup.enter="addPerson" placeholder="新增名字" class="flex-1 bg-slate-50 px-3 py-2 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-primary"><button @click="addPerson" class="bg-dark text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md"><i class="fas fa-plus"></i></button></div>
             </div>
 
-            <!-- 總支出與結餘 -->
             <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+                <!-- 幣別切換按鈕 -->
+                <button @click="toggleCurrency" class="absolute top-4 right-4 bg-white/20 hover:bg-white/30 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold transition flex items-center gap-1 border border-white/30 z-20">
+                    <i class="fas fa-exchange-alt"></i> {{ displayCurrency }}
+                </button>
+
                 <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                
                 <h3 class="text-indigo-100 text-xs font-bold tracking-widest uppercase mb-1">Total Expenses</h3>
-                <div class="text-4xl font-bold mb-2">HKD {{ formatNumber(totalExpense) }}</div>
-                <div class="text-sm text-indigo-200 bg-white/10 inline-block px-3 py-1 rounded-full backdrop-blur-md mb-6">≈ TWD {{ formatNumber(totalExpense * exchangeRate) }}</div>
+                <!-- 總金額顯示 -->
+                <div class="text-4xl font-bold mb-2">
+                    {{ displayCurrency === 'TWD' ? 'NT$' : 'HK$' }} {{ formatCurrency(totalExpense) }}
+                </div>
+                <!-- 次要幣別提示 -->
+                <div class="text-sm text-indigo-200 bg-white/10 inline-block px-3 py-1 rounded-full backdrop-blur-md mb-6">
+                    ≈ {{ displayCurrency === 'TWD' ? 'HK$' : 'NT$' }} {{ formatCurrency(totalExpense, true) }}
+                </div>
+                
                 <div class="space-y-2">
                     <div v-for="(person, name) in balances" :key="name" class="flex justify-between items-center text-sm bg-black/10 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
                         <span class="font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-white"></div> {{ name }}</span>
-                        <!-- 修正：這裡顯示的是台幣 NT$ -->
-                        <span :class="person.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-bold">{{ person.balance >= 0 ? '收' : '付' }} NT$ {{ formatNumber(Math.abs(person.balance) * exchangeRate) }}</span>
+                        <!-- 個人結餘顯示 -->
+                        <span :class="person.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-bold">
+                            {{ person.balance >= 0 ? '收' : '付' }} 
+                            {{ displayCurrency === 'TWD' ? 'NT$' : 'HK$' }} {{ formatCurrency(Math.abs(person.balance)) }}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -318,7 +332,7 @@
             <!-- 智慧結帳 (New Feature) -->
             <div class="bg-slate-800 text-white p-5 rounded-3xl shadow-lg relative overflow-hidden">
                  <div class="flex justify-between items-center mb-3">
-                     <h3 class="font-bold text-sm"><i class="fas fa-robot mr-1"></i> 智慧結帳</h3>
+                     <h3 class="font-bold text-sm"><i class="fas fa-robot mr-1"></i> 智慧結帳 (TWD)</h3>
                      <button @click="calculateSettlement" class="bg-indigo-500 hover:bg-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow transition">
                          ⚡ 計算最佳結帳
                      </button>
@@ -364,7 +378,6 @@
                 </div>
             </div>
 
-            <!-- 列表 -->
             <div class="space-y-3 pb-4">
                 <h4 class="text-sm font-bold text-slate-400 ml-2">最近紀錄</h4>
                 <div v-for="(exp, idx) in expenses" :key="idx" class="flex flex-col bg-white p-4 rounded-2xl border border-slate-50 shadow-sm relative overflow-hidden">
@@ -405,8 +418,6 @@ const firebaseConfig = {
   appId: "1:764791659242:web:f478ee64f1013067705593",
   measurementId: "G-3RYVGRSDX7"
 };
-
-
     let db = null, tripRef = null, isRemoteUpdate = false;
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
@@ -430,6 +441,7 @@ const firebaseConfig = {
             const syncStatus = ref('idle');
             const activeDay = ref(0);
             
+            // 強制初始化 4 天
             const tripDays = ref([{ events: [] }, { events: [] }, { events: [] }, { events: [] }]);
             const foodList = ref([]);
             const souvenirList = ref([]);
@@ -441,6 +453,9 @@ const firebaseConfig = {
             const expenses = ref([]);
             const newExpense = ref({ item: '', amount: '', payer: '我', splitType: 'even', involvedMembers: [], customAmounts: {} });
             const newPersonName = ref('');
+
+            // Display Currency State
+            const displayCurrency = ref('TWD'); // Default TWD as requested
 
             // Settlement Logic
             const settlementPlan = ref([]);
@@ -454,6 +469,7 @@ const firebaseConfig = {
             const initialSwipeOffset = ref(0);
             const saveModeText = computed(() => db ? '雲端' : '本機');
 
+            // 安全獲取當前列表
             const currentDayEvents = computed(() => {
                 if (!tripDays.value[activeDay.value]) tripDays.value[activeDay.value] = { events: [] };
                 return tripDays.value[activeDay.value].events;
@@ -466,6 +482,7 @@ const firebaseConfig = {
                 return [];
             });
 
+            // 匯率 API
             const fetchExchangeRate = async () => {
                 isFetchingRate.value = true;
                 try {
@@ -479,6 +496,27 @@ const firebaseConfig = {
                         alert(`匯率已更新！1 HKD ≈ ${exchangeRate.value} TWD`);
                     }
                 } catch(e) { console.error(e); } finally { isFetchingRate.value = false; }
+            };
+
+            const toggleCurrency = () => {
+                displayCurrency.value = displayCurrency.value === 'HKD' ? 'TWD' : 'HKD';
+            };
+
+            const formatCurrency = (amount, isSecondary = false) => {
+                // Determine target currency based on state and whether this is the secondary display
+                // If primary is TWD, secondary is HKD. If primary is HKD, secondary is TWD.
+                let targetCurr = displayCurrency.value;
+                if (isSecondary) {
+                    targetCurr = displayCurrency.value === 'HKD' ? 'TWD' : 'HKD';
+                }
+
+                let value = amount;
+                if (targetCurr === 'TWD') {
+                    value = amount * exchangeRate.value;
+                }
+                // If target is HKD, amount is already in HKD (base), so no conversion needed.
+
+                return formatNumber(value);
             };
 
             const addMinutes = (timeStr, minsToAdd) => {
@@ -624,6 +662,7 @@ const firebaseConfig = {
                     if (refTime) newTime = addMinutes(refTime, duration);
                 }
                 list.push({ type: 'event', time: newTime, title: '', duration: 60, isEditing: true, id: Date.now(), swipeOffset: 0 }); 
+                // Force update triggers
                 tripDays.value = [...tripDays.value];
             };
             
@@ -669,6 +708,7 @@ const firebaseConfig = {
                 expenses.value.unshift({ item, amount, payer, splitType, involvedMembers: [...involvedMembers], customAmounts: JSON.parse(JSON.stringify(customAmounts)) });
                 newExpense.value.item = ''; newExpense.value.amount = '';
                 people.value.forEach(p => newExpense.value.customAmounts[p] = 0);
+                updateData();
             };
 
             const removeExpense = (i) => { if(confirm('確定刪除？')) expenses.value.splice(i, 1); };
@@ -767,14 +807,14 @@ const firebaseConfig = {
             };
 
             return {
-                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDayEvents, currentList, foodList, souvenirList, settlementPlan, showSettlement,
+                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDayEvents, currentList, foodList, souvenirList, settlementPlan, showSettlement, displayCurrency,
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
                     if (currentTab.value === 'food') return 'Food';
                     if (currentTab.value === 'souvenir') return 'Shop';
                 }),
-                addEvent, addFlight, removeEvent: removeItem, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate, calculateSettlement,
+                addEvent, addFlight, removeEvent: removeItem, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate, calculateSettlement, toggleCurrency, formatCurrency,
                 newPersonName, addPerson, removePerson, autoAdjustTimes, addListItem, removeItem,
                 eventListRef, touchStart, touchMove, touchEnd 
             };
