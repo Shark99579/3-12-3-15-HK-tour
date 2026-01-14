@@ -7,7 +7,7 @@
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SortableJS -->
+    <!-- SortableJS (拖曳排序) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -19,19 +19,20 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: '#2DD4BF', // 湖水綠
-                        secondary: '#F0FDFA', 
-                        accent: '#F43F5E',
+                        primary: '#2DD4BF', // 湖水綠 Teal-400
+                        secondary: '#F0FDFA', // 淺湖水綠背景
+                        accent: '#F43F5E',   // 點綴色 (Rose)
                         dark: '#334155',
-                        food: '#F59E0B',
-                        shop: '#EC4899',
                         'card-bg': '#ffffff',
+                        food: '#F59E0B',
+                        shop: '#EC4899'
                     },
                     fontFamily: {
                         sans: ['"Poppins"', '"Noto Sans TC"', 'sans-serif'],
                     },
                     boxShadow: {
                         'soft': '0 10px 40px -10px rgba(0,0,0,0.08)',
+                        'float': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
                     }
                 }
             }
@@ -48,6 +49,11 @@
             body { display: flex; justify-content: center; min-height: 100vh; align-items: center; padding: 20px; background-image: linear-gradient(135deg, #e0f2fe 0%, #f0fdfa 100%); }
             #app { width: 100%; max-width: 430px; height: 880px; max-height: 92vh; border-radius: 40px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 8px solid #fff; }
         }
+        /* 動畫 */
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+        .timeline-line { position: absolute; left: 24px; top: 40px; bottom: -20px; width: 2px; background: #e2e8f0; z-index: 0; }
+        .last-item .timeline-line { display: none; }
     </style>
 </head>
 <body>
@@ -61,7 +67,7 @@
         <div class="absolute top-20 -left-10 w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
 
         <!-- 標題與狀態 -->
-        <div class="absolute top-0 w-full p-6 pt-12 flex justify-between items-start text-white">
+        <div class="absolute top-0 w-full p-6 pt-12 flex justify-between items-start text-white z-30">
             <div>
                 <div class="flex items-center gap-2 opacity-90 mb-1">
                     <span class="text-xs font-medium tracking-widest uppercase bg-white/20 px-2 py-0.5 rounded backdrop-blur-sm">ID: {{ tripId.substring(0,6) }}</span>
@@ -81,7 +87,7 @@
         </div>
 
         <!-- 天數選單 (固定4天) -->
-        <div class="absolute bottom-0 left-0 w-full px-6 pb-4">
+        <div class="absolute bottom-0 left-0 w-full px-6 pb-4 z-30">
             <div class="flex justify-between items-end">
                 <button v-for="(day, index) in tripDays" :key="index" @click="activeDay = index" class="outline-none flex-1 mx-1 group">
                     <div :class="['py-2 rounded-2xl flex flex-col items-center transition-all duration-300 border', 
@@ -114,7 +120,7 @@
         <!-- ==================== Tab 1: 行程表 ==================== -->
         <div v-if="currentTab === 'itinerary'" class="px-5 pt-6 pb-28 space-y-4">
             
-            <!-- 空白狀態 (確保按鈕可以點擊) -->
+            <!-- 空白狀態 -->
             <div v-if="currentDayEvents.length === 0" class="text-center py-12">
                 <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300 text-2xl">
                     <i class="fas fa-map-marked-alt"></i>
@@ -140,9 +146,10 @@
                         <span class="text-xs font-bold text-slate-400 mb-1">{{ event.time }}</span>
                         <div class="w-3 h-3 rounded-full bg-primary border-2 border-white ring-2 ring-slate-100"></div>
                         <div class="w-0.5 bg-slate-200 flex-1 mt-1 h-full absolute top-6 bottom-[-20px]"></div>
+                        <div class="bg-slate-100 text-[9px] text-slate-400 px-1 rounded mt-1">{{ event.duration || 60 }}m</div>
                     </div>
 
-                    <!-- 卡片容器 (處理滑動) -->
+                    <!-- 卡片容器 -->
                     <div class="relative overflow-hidden rounded-3xl shadow-soft group">
                         <!-- 刪除背景 -->
                         <div class="absolute inset-0 bg-red-500 flex items-center justify-end pr-6 text-white z-0" @click="removeItem(idx, 'itinerary')">
@@ -170,9 +177,13 @@
                                         <div class="flex-1"><label class="text-[10px] text-slate-400 font-bold">起飛</label><input v-model="event.depCode" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold text-center outline-none uppercase"><input v-model="event.depTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none"></div>
                                         <div class="flex-1"><label class="text-[10px] text-slate-400 font-bold">降落</label><input v-model="event.arrCode" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold text-center outline-none uppercase"><input v-model="event.arrTime" type="time" class="w-full bg-slate-50 p-2 rounded-lg text-xs text-center outline-none"></div>
                                     </div>
+                                    <div><label class="text-[10px] text-slate-400 font-bold">出關/交通緩衝 (分)</label><input v-model.number="event.duration" type="number" class="w-full bg-slate-50 p-2 rounded-lg text-sm font-bold text-center outline-none"></div>
                                 </div>
                                 <div v-else class="space-y-3">
-                                    <input v-model="event.time" type="time" class="w-full bg-slate-50 p-3 rounded-xl text-sm font-medium outline-none">
+                                    <div class="flex gap-2">
+                                        <div class="w-1/3"><label class="text-[10px] text-slate-400 font-bold">開始時間</label><input v-model="event.time" type="time" class="w-full bg-slate-50 p-3 rounded-xl text-sm font-medium outline-none"></div>
+                                        <div class="w-2/3"><label class="text-[10px] text-slate-400 font-bold">停留 (分)</label><input v-model.number="event.duration" type="number" class="w-full bg-slate-50 p-3 rounded-xl text-sm font-medium outline-none" placeholder="60"></div>
+                                    </div>
                                     <input v-model="event.title" placeholder="地點名稱" class="w-full bg-slate-50 p-3 rounded-xl font-bold text-dark outline-none">
                                     <input v-model="event.note" placeholder="備註" class="w-full bg-slate-50 p-3 rounded-xl text-sm text-slate-500 outline-none">
                                 </div>
@@ -195,7 +206,10 @@
                                 </div>
                                 <div v-else>
                                     <h3 class="text-lg font-bold text-dark mb-1 leading-snug pr-6">{{ event.title }}</h3>
-                                    <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md mb-3 border border-slate-100"><i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}</p>
+                                    <div class="flex flex-wrap gap-2 mb-3">
+                                        <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md border border-slate-100"><i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}</p>
+                                        <span class="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100"><i class="fas fa-hourglass-half mr-1"></i>{{ event.duration || 60 }} min</span>
+                                    </div>
                                     <div class="flex gap-2">
                                         <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition"><i class="fas fa-location-arrow"></i> 導航</a>
                                     </div>
@@ -225,7 +239,6 @@
                 </div>
             </div>
 
-            <!-- 共用列表容器 -->
             <div ref="eventListRef" class="space-y-4 pb-2 min-h-[10px]">
                 <div v-for="(item, idx) in currentList" :key="item.id" class="relative transition-all duration-300">
                     <div class="relative overflow-hidden rounded-3xl shadow-soft">
@@ -266,6 +279,7 @@
 
         <!-- ==================== Tab 4: Wallet ==================== -->
         <div v-else-if="currentTab === 'wallet'" class="px-5 pt-6 pb-28 space-y-6">
+            <!-- 匯率轉換器 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold">$$</div>
@@ -277,6 +291,7 @@
                 </div>
             </div>
 
+            <!-- 成員管理 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                 <div class="flex justify-between items-center mb-3"><span class="text-xs font-bold text-slate-500 flex items-center gap-1"><i class="fas fa-users"></i> 分帳成員</span></div>
                 <div class="flex flex-wrap gap-2 mb-3">
@@ -285,6 +300,7 @@
                 <div class="flex gap-2"><input v-model="newPersonName" @keyup.enter="addPerson" placeholder="新增名字" class="flex-1 bg-slate-50 px-3 py-2 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-primary"><button @click="addPerson" class="bg-dark text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md"><i class="fas fa-plus"></i></button></div>
             </div>
 
+            <!-- 總支出與結餘 -->
             <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
                 <div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
                 <h3 class="text-indigo-100 text-xs font-bold tracking-widest uppercase mb-1">Total Expenses</h3>
@@ -293,11 +309,37 @@
                 <div class="space-y-2">
                     <div v-for="(person, name) in balances" :key="name" class="flex justify-between items-center text-sm bg-black/10 p-3 rounded-xl border border-white/5 backdrop-blur-sm">
                         <span class="font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-white"></div> {{ name }}</span>
-                        <span :class="person.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-bold">{{ person.balance >= 0 ? '收' : '付' }} ${{ Math.abs(person.balance) }}</span>
+                        <!-- 修正：這裡顯示的是台幣 NT$ -->
+                        <span :class="person.balance >= 0 ? 'text-green-300' : 'text-red-300'" class="font-bold">{{ person.balance >= 0 ? '收' : '付' }} NT$ {{ formatNumber(Math.abs(person.balance) * exchangeRate) }}</span>
                     </div>
                 </div>
             </div>
 
+            <!-- 智慧結帳 (New Feature) -->
+            <div class="bg-slate-800 text-white p-5 rounded-3xl shadow-lg relative overflow-hidden">
+                 <div class="flex justify-between items-center mb-3">
+                     <h3 class="font-bold text-sm"><i class="fas fa-robot mr-1"></i> 智慧結帳</h3>
+                     <button @click="calculateSettlement" class="bg-indigo-500 hover:bg-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold shadow transition">
+                         ⚡ 計算最佳結帳
+                     </button>
+                 </div>
+                 
+                 <div v-if="settlementPlan.length > 0" class="space-y-2 bg-slate-700/50 p-3 rounded-xl backdrop-blur-sm border border-white/10">
+                     <div v-for="(transfer, i) in settlementPlan" :key="i" class="flex items-center justify-between text-xs font-medium">
+                         <div class="flex items-center gap-2">
+                             <span class="bg-red-400/20 text-red-300 px-2 py-0.5 rounded">{{ transfer.from }}</span>
+                             <i class="fas fa-arrow-right text-slate-400"></i>
+                             <span class="bg-green-400/20 text-green-300 px-2 py-0.5 rounded">{{ transfer.to }}</span>
+                         </div>
+                         <span class="text-white font-bold">NT$ {{ formatNumber(transfer.amount) }}</span>
+                     </div>
+                 </div>
+                 <div v-else-if="showSettlement" class="text-center text-xs text-slate-400 py-2">
+                     目前已結清，無須轉帳 🎉
+                 </div>
+            </div>
+
+            <!-- 新增記帳區 -->
             <div class="bg-white p-5 rounded-3xl shadow-soft border border-slate-50">
                 <h4 class="text-sm font-bold text-slate-700 mb-4">記上一筆</h4>
                 <div class="space-y-3">
@@ -322,6 +364,7 @@
                 </div>
             </div>
 
+            <!-- 列表 -->
             <div class="space-y-3 pb-4">
                 <h4 class="text-sm font-bold text-slate-400 ml-2">最近紀錄</h4>
                 <div v-for="(exp, idx) in expenses" :key="idx" class="flex flex-col bg-white p-4 rounded-2xl border border-slate-50 shadow-sm relative overflow-hidden">
@@ -363,6 +406,7 @@ const firebaseConfig = {
   measurementId: "G-3RYVGRSDX7"
 };
 
+
     let db = null, tripRef = null, isRemoteUpdate = false;
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
@@ -386,7 +430,6 @@ const firebaseConfig = {
             const syncStatus = ref('idle');
             const activeDay = ref(0);
             
-            // 強制初始化 4 天
             const tripDays = ref([{ events: [] }, { events: [] }, { events: [] }, { events: [] }]);
             const foodList = ref([]);
             const souvenirList = ref([]);
@@ -399,6 +442,10 @@ const firebaseConfig = {
             const newExpense = ref({ item: '', amount: '', payer: '我', splitType: 'even', involvedMembers: [], customAmounts: {} });
             const newPersonName = ref('');
 
+            // Settlement Logic
+            const settlementPlan = ref([]);
+            const showSettlement = ref(false);
+
             // Sortable & Swipe
             const eventListRef = ref(null);
             let sortableInstance = null;
@@ -407,7 +454,6 @@ const firebaseConfig = {
             const initialSwipeOffset = ref(0);
             const saveModeText = computed(() => db ? '雲端' : '本機');
 
-            // 安全獲取當前列表
             const currentDayEvents = computed(() => {
                 if (!tripDays.value[activeDay.value]) tripDays.value[activeDay.value] = { events: [] };
                 return tripDays.value[activeDay.value].events;
@@ -420,7 +466,6 @@ const firebaseConfig = {
                 return [];
             });
 
-            // 匯率 API
             const fetchExchangeRate = async () => {
                 isFetchingRate.value = true;
                 try {
@@ -451,7 +496,8 @@ const firebaseConfig = {
                     const prev = list[i-1]; const curr = list[i];
                     let prevEndTime = (prev.type === 'flight') ? prev.arrTime : prev.time;
                     if (!prevEndTime) continue;
-                    const minStartTime = addMinutes(prevEndTime, 30);
+                    const duration = prev.duration ? parseInt(prev.duration) : 60;
+                    const minStartTime = addMinutes(prevEndTime, duration);
                     let currStartTime = (curr.type === 'flight') ? curr.depTime : curr.time;
                     if (currStartTime < minStartTime && curr.type !== 'flight') curr.time = minStartTime;
                 }
@@ -475,7 +521,6 @@ const firebaseConfig = {
 
             watch([activeDay, currentTab], () => { 
                 activeSwipeIndex.value = -1; 
-                // Reset scroll
                 const mainContent = document.querySelector('main');
                 if(mainContent) mainContent.scrollTop = 0;
                 nextTick(initSortable); 
@@ -575,10 +620,10 @@ const firebaseConfig = {
                 if (list.length > 0) {
                     const last = list[list.length - 1];
                     const refTime = (last.type === 'flight') ? last.arrTime : last.time;
-                    if (refTime) newTime = addMinutes(refTime, 30);
+                    const duration = last.duration ? parseInt(last.duration) : 60;
+                    if (refTime) newTime = addMinutes(refTime, duration);
                 }
-                list.push({ type: 'event', time: newTime, title: '', isEditing: true, id: Date.now(), swipeOffset: 0 }); 
-                // Force update triggers
+                list.push({ type: 'event', time: newTime, title: '', duration: 60, isEditing: true, id: Date.now(), swipeOffset: 0 }); 
                 tripDays.value = [...tripDays.value];
             };
             
@@ -588,9 +633,10 @@ const firebaseConfig = {
                 if (list.length > 0) {
                     const last = list[list.length - 1];
                     const refTime = (last.type === 'flight') ? last.arrTime : last.time;
-                    if (refTime) newDep = addMinutes(refTime, 60); 
+                    const duration = last.duration ? parseInt(last.duration) : 60;
+                    if (refTime) newDep = addMinutes(refTime, duration); 
                 }
-                list.push({ type: 'flight', depCode: '', depTime: newDep, arrCode: '', arrTime: addMinutes(newDep, 120), title: '', isEditing: true, id: Date.now(), swipeOffset: 0 });
+                list.push({ type: 'flight', depCode: '', depTime: newDep, arrCode: '', arrTime: addMinutes(newDep, 120), duration: 60, title: '', isEditing: true, id: Date.now(), swipeOffset: 0 });
                 tripDays.value = [...tripDays.value];
             };
 
@@ -651,6 +697,54 @@ const firebaseConfig = {
                 for(let p in bal) bal[p].balance = Math.round(bal[p].paid - bal[p].shouldPay);
                 return bal;
             });
+
+            // Settlement Algorithm
+            const calculateSettlement = () => {
+                let debtors = [];
+                let creditors = [];
+                
+                // 1. Separate into two lists
+                for (const [name, data] of Object.entries(balances.value)) {
+                    const bal = data.balance;
+                    if (bal < -0.1) debtors.push({ name, amount: -bal }); // store positive value
+                    else if (bal > 0.1) creditors.push({ name, amount: bal });
+                }
+
+                // Sort descending (greedy approach)
+                debtors.sort((a, b) => b.amount - a.amount);
+                creditors.sort((a, b) => b.amount - a.amount);
+
+                const plan = [];
+                let i = 0;
+                let j = 0;
+
+                while (i < debtors.length && j < creditors.length) {
+                    let debtor = debtors[i];
+                    let creditor = creditors[j];
+                    
+                    let amount = Math.min(debtor.amount, creditor.amount);
+                    let amountTWD = Math.round(amount * exchangeRate.value);
+
+                    if (amountTWD > 0) {
+                        plan.push({
+                            from: debtor.name,
+                            to: creditor.name,
+                            amount: amountTWD
+                        });
+                    }
+
+                    // Update remaining amounts
+                    debtor.amount -= amount;
+                    creditor.amount -= amount;
+
+                    if (debtor.amount < 0.1) i++;
+                    if (creditor.amount < 0.1) j++;
+                }
+                
+                settlementPlan.value = plan;
+                showSettlement.value = true;
+            };
+
             const formatNumber = (num) => new Intl.NumberFormat().format(Math.round(num));
 
             const copyLink = () => { navigator.clipboard.writeText(window.location.href); alert("已複製 ID: " + tripId); };
@@ -673,14 +767,14 @@ const firebaseConfig = {
             };
 
             return {
-                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDayEvents, currentList, foodList, souvenirList,
+                tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDayEvents, currentList, foodList, souvenirList, settlementPlan, showSettlement,
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
                     if (currentTab.value === 'food') return 'Food';
                     if (currentTab.value === 'souvenir') return 'Shop';
                 }),
-                addEvent, addFlight, removeEvent: removeItem, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate,
+                addEvent, addFlight, removeEvent: removeItem, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate, calculateSettlement,
                 newPersonName, addPerson, removePerson, autoAdjustTimes, addListItem, removeItem,
                 eventListRef, touchStart, touchMove, touchEnd 
             };
