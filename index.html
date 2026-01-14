@@ -19,7 +19,7 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: '#2DD4BF', 
+                        primary: '#2DD4BF', // 湖水綠
                         secondary: '#F0FDFA', 
                         accent: '#F43F5E',   
                         dark: '#334155',
@@ -178,9 +178,6 @@
                                         <p v-if="event.note" class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-1 rounded-md border border-slate-100"><i class="fas fa-sticky-note mr-1 text-slate-300"></i>{{ event.note }}</p>
                                         <span class="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100"><i class="fas fa-hourglass-half mr-1"></i>{{ event.duration || 60 }} min</span>
                                     </div>
-                                    <div class="flex gap-2">
-                                        <a :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(event.title + ' 香港')" target="_blank" @click.stop class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold hover:bg-slate-200 transition"><i class="fas fa-location-arrow"></i> 導航</a>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -231,6 +228,7 @@
 
         <!-- ==================== Tab 4: Wallet ==================== -->
         <div v-else-if="currentTab === 'wallet'" class="px-5 pt-6 pb-28 space-y-6">
+            <!-- 匯率轉換器 -->
             <div class="bg-white p-4 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center text-xs font-bold">$$</div>
@@ -245,7 +243,7 @@
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                 <div class="flex justify-between items-center mb-3"><span class="text-xs font-bold text-slate-500 flex items-center gap-1"><i class="fas fa-users"></i> 分帳成員</span></div>
                 <div class="flex flex-wrap gap-2 mb-3">
-                    <div v-for="(p, idx) in people" :key="idx" class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center group">{{ p }}<button @click="removePerson(idx)" class="ml-2 text-slate-300 hover:text-red-400" v-if="people.length > 1"><i class="fas fa-times"></i></button></div>
+                    <div v-for="(p, idx) in people" :key="p" class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center group">{{ p }}<button @click.stop="removePerson(idx)" class="ml-2 text-red-500 hover:text-red-700 w-5 h-5 flex items-center justify-center rounded-full active:bg-red-100" v-if="people.length > 1"><i class="fas fa-times"></i></button></div>
                 </div>
                 <div class="flex gap-2"><input v-model="newPersonName" @keyup.enter="addPerson" placeholder="新增名字" class="flex-1 bg-slate-50 px-3 py-2 rounded-xl text-xs font-bold outline-none focus:ring-1 focus:ring-primary"><button @click="addPerson" class="bg-dark text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md"><i class="fas fa-plus"></i></button></div>
             </div>
@@ -254,12 +252,18 @@
             <div class="bg-white p-4 rounded-2xl shadow-sm border border-yellow-200 bg-yellow-50/50">
                 <div class="flex justify-between items-center mb-3">
                     <span class="text-xs font-bold text-yellow-600 flex items-center gap-1"><i class="fas fa-piggy-bank"></i> 公款管理 (HKD)</span>
-                    <button @click="showFundDetails = !showFundDetails" class="text-xs text-yellow-500 underline">{{ showFundDetails ? '隱藏' : '編輯投入' }}</button>
+                    <button @click="showFundDetails = !showFundDetails" class="text-xs text-yellow-500 underline">{{ showFundDetails ? '隱藏' : '展開' }}</button>
                 </div>
-                <div v-if="showFundDetails" class="mb-4 space-y-2 border-b border-yellow-100 pb-3">
-                    <div v-for="p in people" :key="p" class="flex items-center gap-2">
-                        <span class="text-xs font-bold text-slate-500 w-16 truncate">{{ p }} 投入</span>
-                        <input v-model.number="publicFundDeposits[p]" @change="updateData" type="number" placeholder="0" class="flex-1 bg-white p-2 rounded-lg text-xs outline-none border border-yellow-200 focus:border-yellow-400">
+                <div v-if="showFundDetails" class="mb-4 space-y-3 border-b border-yellow-100 pb-3">
+                    <div v-for="p in people" :key="p" class="flex flex-col gap-1 border-b border-yellow-100/50 pb-2 last:border-0 last:pb-0">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs font-bold text-slate-600">{{ p }}</span>
+                            <span class="text-xs text-yellow-600 bg-yellow-100/50 px-2 py-0.5 rounded-full">已投入: ${{ formatNumber(publicFundDeposits[p] || 0) }}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <input v-model.number="tempFundInputs[p]" type="number" placeholder="新增投入金額" class="flex-1 bg-white p-2 rounded-lg text-xs outline-none border border-yellow-200 focus:border-yellow-400" @keyup.enter="confirmAddFund(p)">
+                            <button @click="confirmAddFund(p)" class="bg-yellow-400 hover:bg-yellow-500 text-white px-3 py-1 rounded-lg text-xs font-bold shadow-sm transition"><i class="fas fa-plus"></i> 加入</button>
+                        </div>
                     </div>
                 </div>
                 <div class="flex justify-between items-center text-xs">
@@ -292,7 +296,6 @@
                 </div>
             </div>
 
-            <!-- 智慧結帳 -->
             <div class="bg-slate-800 text-white p-5 rounded-3xl shadow-lg relative overflow-hidden">
                  <div class="flex justify-between items-center mb-3">
                      <h3 class="font-bold text-sm"><i class="fas fa-robot mr-1"></i> 智慧結帳 ({{ displayCurrency }})</h3>
@@ -325,7 +328,6 @@
                         </div>
                         <div v-else class="space-y-2">
                             <div v-for="p in people" :key="p" class="flex items-center gap-2"><span class="text-xs font-bold text-slate-500 w-16 truncate">{{ p }}</span><input v-model.number="newExpense.customAmounts[p]" type="number" placeholder="0" class="flex-1 bg-white p-2 rounded-lg text-xs outline-none border border-slate-100 focus:border-primary"></div>
-                            <div class="text-right text-[10px] font-bold" :class="customTotal === newExpense.amount ? 'text-green-500' : 'text-red-400'">目前分配: ${{ customTotal }} / ${{ newExpense.amount || 0 }}</div>
                         </div>
                     </div>
                     <button @click="addExpense" class="w-full bg-dark text-white py-4 rounded-2xl font-bold shadow-lg shadow-dark/20 active:scale-[0.98] transition-transform">確認記帳</button>
@@ -379,8 +381,6 @@ const firebaseConfig = {
   appId: "1:764791659242:web:f478ee64f1013067705593",
   measurementId: "G-3RYVGRSDX7"
 };
-
-
     let db = null, tripRef = null, isRemoteUpdate = false;
     const urlParams = new URLSearchParams(window.location.search);
     let tripId = urlParams.get('id');
@@ -412,13 +412,15 @@ const firebaseConfig = {
             const exchangeRate = ref(4.1);
             const lastRateUpdate = ref(''); 
             const isFetchingRate = ref(false); 
-            const people = ref(['我', '朋友']);
+            // 預設成員
+            const people = ref(['紋','鈺','樺','珠','蓁','老','紀','莊']);
             const expenses = ref([]);
             const newExpense = ref({ item: '', amount: '', payer: '我', splitType: 'even', involvedMembers: [], customAmounts: {} });
             const newPersonName = ref('');
 
-            // Public Fund Logic
+            // Public Fund Logic (Temp inputs)
             const publicFundDeposits = ref({});
+            const tempFundInputs = ref({}); // Store temp input values
             const showFundDetails = ref(false);
 
             // Display Currency State
@@ -450,7 +452,10 @@ const firebaseConfig = {
 
             const publicFundStats = computed(() => {
                 let deposited = 0;
-                for (let p in publicFundDeposits.value) deposited += (publicFundDeposits.value[p] || 0);
+                // Only iterate existing people
+                people.value.forEach(p => {
+                    deposited += (publicFundDeposits.value[p] || 0);
+                });
                 
                 const spent = expenses.value
                     .filter(e => e.payer === '公款')
@@ -537,6 +542,7 @@ const firebaseConfig = {
                 newPeople.forEach(p => { 
                     if(!(p in newExpense.value.customAmounts)) newExpense.value.customAmounts[p] = 0; 
                     if(!(p in publicFundDeposits.value)) publicFundDeposits.value[p] = 0;
+                    if(!(p in tempFundInputs.value)) tempFundInputs.value[p] = '';
                 });
             }, { immediate: true });
 
@@ -544,17 +550,15 @@ const firebaseConfig = {
                 let sum = 0; for(let p in newExpense.value.customAmounts) sum += (newExpense.value.customAmounts[p] || 0); return sum;
             });
 
-            // 核心分帳計算 (Split Logic)
             const balances = computed(() => {
                 let bal = {};
                 // 初始化
                 people.value.forEach(p => bal[p] = { 
-                    paidPrivate: 0, // 私人墊付
+                    paidPrivate: 0, 
                     shouldPayPrivate: 0, 
                     privateBalance: 0,
-                    
-                    fundDeposit: publicFundDeposits.value[p] || 0, // 公款投入
-                    fundUsage: 0, // 公款使用
+                    fundDeposit: publicFundDeposits.value[p] || 0, 
+                    fundUsage: 0, 
                     fundBalance: 0 
                 });
 
@@ -562,44 +566,31 @@ const firebaseConfig = {
                     const payer = exp.payer;
                     const amount = exp.amount;
                     
-                    // 1. 計算「付款方」
                     if (payer !== '公款' && bal[payer]) {
-                        // 私人墊付
                         bal[payer].paidPrivate += amount;
                     } 
-                    // 如果是公款付的，不影響個人的 paidPrivate
 
-                    // 2. 計算「消費方」(Debits)
                     let splitMap = {};
                     if (exp.splitType === 'custom') {
                         splitMap = exp.customAmounts;
                     } else {
-                        // 修正：如果 involvedMembers 為空，使用 people 作為預設（處理舊資料），但如果有存 involvedMembers 就用存的
-                        let involved = (exp.involvedMembers && exp.involvedMembers.length > 0) ? exp.involvedMembers : people.value;
-                        
-                        // 防呆：如果 involved 為空（理論上不該發生），避免除以0
-                        if (involved.length === 0) involved = people.value;
-
+                        const involved = (exp.involvedMembers && exp.involvedMembers.length > 0) ? exp.involvedMembers : people.value;
                         const splitAmt = amount / involved.length;
                         involved.forEach(p => splitMap[p] = splitAmt);
                     }
 
-                    // 歸戶
                     for (const person in splitMap) {
                         if (bal[person]) {
                             const myShare = splitMap[person] || 0;
                             if (payer === '公款') {
-                                // 這是公款出的錢 -> 扣我的公款額度
                                 bal[person].fundUsage += myShare;
                             } else {
-                                // 這是別人(或我自己)墊的錢 -> 算入私人借貸
                                 bal[person].shouldPayPrivate += myShare;
                             }
                         }
                     }
                 });
 
-                // 3. 結算
                 for (let p in bal) {
                     bal[p].privateBalance = Math.round(bal[p].paidPrivate - bal[p].shouldPayPrivate);
                     bal[p].fundBalance = Math.round(bal[p].fundDeposit - bal[p].fundUsage);
@@ -627,10 +618,12 @@ const firebaseConfig = {
                     let creditor = creditors[j];
                     let amount = Math.min(debtor.amount, creditor.amount);
                     
-                    // Use formatCurrency logic to store raw HKD, display will handle conversion?
-                    // No, for settlement plan we want to snapshot the value at current rate if display is TWD.
-                    // But to be consistent with display, let's store HKD and let template convert.
-                    if (amount > 0.01) plan.push({ from: debtor.name, to: creditor.name, amount: amount });
+                    // Display amount calculation
+                    let amountDisplay = amount;
+                    if (displayCurrency.value === 'TWD') amountDisplay = Math.round(amount * exchangeRate.value);
+                    else amountDisplay = parseFloat(amount.toFixed(1));
+
+                    if (amountDisplay > 0) plan.push({ from: debtor.name, to: creditor.name, amount: amountDisplay });
                     
                     debtor.amount -= amount; creditor.amount -= amount;
                     if (debtor.amount < 0.1) i++;
@@ -638,6 +631,16 @@ const firebaseConfig = {
                 }
                 settlementPlan.value = plan;
                 showSettlement.value = true;
+            };
+
+            // Confirm Add Fund
+            const confirmAddFund = (personName) => {
+                const amountToAdd = tempFundInputs.value[personName];
+                if (amountToAdd && amountToAdd > 0) {
+                    publicFundDeposits.value[personName] = (publicFundDeposits.value[personName] || 0) + amountToAdd;
+                    tempFundInputs.value[personName] = ''; // Clear input
+                    updateData();
+                }
             };
 
             const touchStart = (e, idx, listType) => {
@@ -691,7 +694,14 @@ const firebaseConfig = {
                 people.value = data.people || people.value;
                 foodList.value = data.foodList || [];
                 souvenirList.value = data.souvenirList || [];
-                publicFundDeposits.value = data.publicFundDeposits || {}; // Load deposits
+                
+                const rawDeposits = data.publicFundDeposits || {};
+                const cleanDeposits = {};
+                people.value.forEach(p => {
+                    if (rawDeposits[p]) cleanDeposits[p] = rawDeposits[p];
+                });
+                publicFundDeposits.value = cleanDeposits;
+
                 syncStatus.value = 'done';
                 nextTick(initSortable);
             };
@@ -706,7 +716,7 @@ const firebaseConfig = {
                     people: people.value,
                     foodList: JSON.parse(JSON.stringify(foodList.value)),
                     souvenirList: JSON.parse(JSON.stringify(souvenirList.value)),
-                    publicFundDeposits: JSON.parse(JSON.stringify(publicFundDeposits.value)), // Save deposits
+                    publicFundDeposits: JSON.parse(JSON.stringify(publicFundDeposits.value)), 
                     lastUpdated: new Date().toISOString()
                 };
                 if (db && tripRef) set(tripRef, dataToSave).then(() => setTimeout(() => syncStatus.value = 'done', 500));
@@ -772,18 +782,8 @@ const firebaseConfig = {
                 if(splitType === 'custom' && customTotal.value !== amount) return alert("金額不符");
                 if(splitType === 'even' && involvedMembers.length === 0) return alert("請選擇成員");
                 
-                // IMPORTANT: Snapshot the involvedMembers at this moment
-                expenses.value.unshift({ 
-                    item, 
-                    amount, 
-                    payer, 
-                    splitType, 
-                    involvedMembers: [...involvedMembers], // Creates a shallow copy of the array
-                    customAmounts: JSON.parse(JSON.stringify(customAmounts)) 
-                });
-                
-                newExpense.value.item = ''; 
-                newExpense.value.amount = '';
+                expenses.value.unshift({ item, amount, payer, splitType, involvedMembers: [...involvedMembers], customAmounts: JSON.parse(JSON.stringify(customAmounts)) });
+                newExpense.value.item = ''; newExpense.value.amount = '';
                 people.value.forEach(p => newExpense.value.customAmounts[p] = 0);
             };
 
@@ -793,7 +793,22 @@ const firebaseConfig = {
                 const name = newPersonName.value.trim();
                 if (name && !people.value.includes(name)) { people.value.push(name); newPersonName.value = ''; }
             };
-            const removePerson = (index) => { if(confirm('Delete?')) { people.value.splice(index, 1); } };
+            
+            const removePerson = (index) => {
+                const nameToRemove = people.value[index];
+                if(!nameToRemove) return;
+
+                if(confirm(`確定要移除成員「${nameToRemove}」？`)) {
+                    people.value.splice(index, 1);
+                    if(publicFundDeposits.value && (nameToRemove in publicFundDeposits.value)) delete publicFundDeposits.value[nameToRemove];
+                    if(newExpense.value.customAmounts && (nameToRemove in newExpense.value.customAmounts)) delete newExpense.value.customAmounts[nameToRemove];
+                    if(newExpense.value.involvedMembers) {
+                         const idx = newExpense.value.involvedMembers.indexOf(nameToRemove);
+                         if(idx > -1) newExpense.value.involvedMembers.splice(idx, 1);
+                    }
+                    updateData();
+                }
+            };
 
             const totalExpense = computed(() => expenses.value.reduce((sum, item) => sum + (item.amount || 0), 0));
 
@@ -820,7 +835,7 @@ const firebaseConfig = {
 
             return {
                 tripId, currentTab, weather, activeDay, tripDays, expenses, exchangeRate, lastRateUpdate, isFetchingRate, people, newExpense, balances, totalExpense, syncStatus, saveModeText, customTotal, currentDayEvents, currentList, foodList, souvenirList, settlementPlan, showSettlement, displayCurrency,
-                publicFundDeposits, publicFundStats, showFundDetails,
+                publicFundDeposits, publicFundStats, showFundDetails, tempFundInputs,
                 currentTabName: computed(() => {
                     if (currentTab.value === 'itinerary') return 'Plan';
                     if (currentTab.value === 'wallet') return 'Wallet';
@@ -828,7 +843,7 @@ const firebaseConfig = {
                     if (currentTab.value === 'souvenir') return 'Shop';
                 }),
                 addEvent, addFlight, removeEvent: removeItem, addExpense, removeExpense, updateData, switchTab, copyLink, formatNumber, fetchExchangeRate, calculateSettlement, toggleCurrency, formatCurrency,
-                newPersonName, addPerson, removePerson, autoAdjustTimes, addListItem, removeItem,
+                newPersonName, addPerson, removePerson, autoAdjustTimes, addListItem, removeItem, confirmAddFund,
                 eventListRef, touchStart, touchMove, touchEnd 
             };
         }
